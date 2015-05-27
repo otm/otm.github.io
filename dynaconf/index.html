@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+  
+    
+    <meta name="go-import" content="otm.io/dynaconf git https://gopkg.in/otm/dynaconf">
+    
+  
+
+  <title> Dynaconf  &middot; otm.io </title>
+  
+  
+  <link rel="stylesheet" href="http://otm.github.io/css/poole.css">
+  <link rel="stylesheet" href="http://otm.github.io/css/syntax.css">
+  <link rel="stylesheet" href="http://otm.github.io/css/hyde.css">
+  <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=PT+Sans:400,400italic,700|Abril+Fatface">
+
+  
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+
+  
+  <link href="" rel="alternate" type="application/rss+xml" title="otm.io" />
+
+  <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+
+  <link href='http://fonts.googleapis.com/css?family=Raleway:400,300' rel='stylesheet' type='text/css'>
+
+  <script src="//ajax.googleapis.com/ajax/libs/webfont/1.4.7/webfont.js"></script>
+  <script>
+    WebFont.load({
+      google: {
+        families: ['Raleway']
+      }
+    });
+  </script>
+
+</head>
+
+<body>
+
+<div class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <h1 class="brand"><a href="http://otm.github.io">otm.io</a></h1>
+      <p class="lead">
+       heeding the code 
+      </p>
+    </div>
+
+
+
+    <ul class="sidebar-nav">
+      <li><a href="http://otm.github.io/blog">Posts</a></li>
+      
+        <li><a href="/about/">About </a></li>
+      
+      <br/>
+      
+      <li>Code:</li>
+        
+          <li><a href="/dynaconf/">Dynaconf </a></li>
+        
+          <li><a href="/sshauth/">sshauth </a></li>
+        
+      
+    </ul>
+      
+      
+      
+      <a href="https://github.com/otm"><i class="fa fa-github-square"></i></a>&nbsp;&nbsp;
+      <a href="https://plus.google.com/&#43;NilsLagerkvist"><i class="fa fa-google-plus"></i></a>
+
+    <p class="footnote">powered by <a href="http://hugo.spf13.com">Hugo</a> <br/>
+    &copy; 2015 Nils Lagerkvist. All rights reserved.</p>
+
+  </div>
+</div>
+
+
+    <div class="content container">
+  <div class="post">
+    <h1 class="post-title">Dynaconf
+    
+    <span class="badges">
+    
+    	<a href="https://godoc.org/otm/dynaconf"><img class="badge" title="godoc" alt="godoc" src="https://godoc.org/otm/dynaconf?status.png"></a>
+    
+    	<a href="https://github.com/otm/dynaconf/fork"><img class="badge" title="fork me" alt="fork me" src="http://githubbadges.com/fork.svg?user=otm&amp;repo=dynaconf&amp;style=default"></a>
+    
+    	<a href="https://github.com/otm/dynaconf/releases/latest"><img class="badge" title="download" alt="download" src="https://img.shields.io/github/release/qubyte/rubidium.svg"></a>
+    
+    </span>
+    
+    </h1>
+    
+
+<h5 id="dynaconf-generates-configuration-files-from-templates:6f91a26144bffefc6ca98c36577d8112">Dynaconf generates configuration files from templates.</h5>
+
+<p>Dynaconf templates are expressed in the Go template format. See <a href="http://golang.org/pkg/text/template/">http://golang.org/pkg/text/template/</a> for more information.</p>
+
+<h3 id="installation:6f91a26144bffefc6ca98c36577d8112">Installation</h3>
+
+<p>go get github.com/otm/dynaconf</p>
+
+<h3 id="build-install:6f91a26144bffefc6ca98c36577d8112">Build/Install</h3>
+
+<p>go install github.com/otm/dynaconf</p>
+
+<h3 id="usage:6f91a26144bffefc6ca98c36577d8112">Usage</h3>
+
+<p>dynaconf [options] -template template:outfile[:actions]</p>
+
+<h4 id="actions:6f91a26144bffefc6ca98c36577d8112">Actions</h4>
+
+<p>Actions can be one of the following:</p>
+
+<ul>
+<li>validate=json - validates output as JSON</li>
+<li>exec=command - run command after the configuration is created</li>
+</ul>
+
+<h4 id="options:6f91a26144bffefc6ca98c36577d8112">Options</h4>
+
+<p>All options are optionally except for <strong>template</strong></p>
+
+<ul>
+<li>dry-run=false: Output result to stdout instead of files</li>
+<li>log-files=false: Log files written to disk</li>
+<li>param=[]: Parameters to use when generating configuration</li>
+<li>template=[]: The template definition to use</li>
+<li>version=false: Show version and exit</li>
+</ul>
+
+<h3 id="examples:6f91a26144bffefc6ca98c36577d8112">Examples</h3>
+
+<h4 id="render-a-template:6f91a26144bffefc6ca98c36577d8112">Render a template</h4>
+
+<pre><code>dynaconf -template ./examples/cfg.template:/tmp/cfg.json -param name=john
+</code></pre>
+
+<h4 id="render-a-template-with-additional-environment-variables:6f91a26144bffefc6ca98c36577d8112">Render a template with additional environment variables</h4>
+
+<pre><code>varsion=&quot;1.2.3&quot; dynaconf -template ./examples/cfg.template:/tmp/cfg.json -param name=john
+</code></pre>
+
+<h4 id="render-a-template-and-validate-output:6f91a26144bffefc6ca98c36577d8112">Render a template and validate output</h4>
+
+<pre><code>dynaconf -template ./examples/cfg.template:/tmp/cfg.json:validate=json -param name=john
+</code></pre>
+
+<h4 id="render-a-template-and-run-a-command-after:6f91a26144bffefc6ca98c36577d8112">Render a template and run a command after</h4>
+
+<pre><code>dynaconf -template ./examples/cfg.template:/tmp/cfg.json:exec=&quot;cat /tmp/cfg.json&quot; -param name=john
+</code></pre>
+
+<h4 id="render-multiple-templates-at-the-same-time:6f91a26144bffefc6ca98c36577d8112">Render multiple templates at the same time</h4>
+
+<pre><code>dynaconf -template ./examples/cfg.template:/tmp/cfg.json \
+-template ./examples/cfg2.template:/tmp/cfg2.json \
+-param name=john -param year=2015
+</code></pre>
+
+  </div>
+  </div>
+
+  </body>
+</html>

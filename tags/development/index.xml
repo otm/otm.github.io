@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>otm.io</title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://otm.github.io/tags/development/</link>
+    <language>en-us</language>
+    <author>Nils Lagerkvist</author>
+    <copyright>2015 Nils Lagerkvist</copyright>
+    <updated>Wed, 27 May 2015 22:16:49 CEST</updated>
+    
+    
+    
+    
+    
+  </channel>
+</rss>

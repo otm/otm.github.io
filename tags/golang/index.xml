@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>otm.io</title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://otm.github.io/tags/golang/</link>
+    <language>en-us</language>
+    <author>Nils Lagerkvist</author>
+    <copyright>2015 Nils Lagerkvist</copyright>
+    <updated>Wed, 27 May 2015 22:24:16 CEST</updated>
+    
+    
+    <item>
+      <title>The Raft Algorithm</title>
+      <link>http://otm.github.io/2015/05/the-raft-algorithm/</link>
+      <pubDate>Wed, 27 May 2015 22:24:16 CEST</pubDate>
+      <author>Nils Lagerkvist</author>
+      <guid>http://otm.github.io/2015/05/the-raft-algorithm/</guid>
+      <description>
+
+&lt;p&gt;The Raft consensus algorithm provides a understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or alternative to an algorithm called Paxos.&lt;/p&gt;
+
+&lt;p&gt;A node in the cluster can have three states: follower, candidate, or leader. Consensus in the cluster is maintained by the leader, and is responsible for log replication. To become the leader a node will change it&amp;rsquo;s status from follower to candidate.&lt;/p&gt;
+
+&lt;h3 id=&#34;leader-election:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader Election&lt;/h3&gt;
+
+&lt;p&gt;The leader in the cluster send heartbeat messages to the followers. If a follower does not receive a heartbeat within the election timeout it will transition state from follower to candidate. The candidate start a new election term and increases the &lt;em&gt;term&lt;/em&gt; counter, vote for itself and send a &lt;em&gt;RequestVote&lt;/em&gt; message to the cluster members. A member node will vote on the first candidate that sends a &lt;em&gt;RequestVote&lt;/em&gt; message, and it will only vote once during a &lt;em&gt;term&lt;/em&gt;. At this point there are three scenarios in the cluster:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;The candidate receive a message from a leader with equal or higher &lt;em&gt;term&lt;/em&gt; - and transition from candidate to flower.&lt;/li&gt;
+&lt;li&gt;The candidate receive a majority of the votes - and transition from candidate to leader.&lt;/li&gt;
+&lt;li&gt;The candidate&amp;rsquo;s election times out - and transition form candidate to follower.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h3 id=&#34;log-replication:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Log Replication&lt;/h3&gt;
+
+&lt;p&gt;All changes goes through the leader, leader get proposal, creates a log entry (uncommited), then replicate the entry to the followers, when a majority has written the log entry and commits the entry (the leader state has now changed), the leader notifies the followers that the entry is committed. At this point the cluster is in consensus.&lt;/p&gt;
+
+&lt;h3 id=&#34;log-replication-1:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Log replication&lt;/h3&gt;
+
+&lt;p&gt;Once there is a leader the cluster can move forward. All changes goes through the leader, however followers can propose a change to the leader. When the leader is updated it creates a log entry, which is uncommited; the leader replicates the log entry to the followers in an &lt;em&gt;AppendEntries&lt;/em&gt; message. When a majority of followers has written the log entry, the leader will commit the pending entry; the leader state has now changed and notifies the followers that the entry is committed. At this point the cluster is in consensus and has moved forward.&lt;/p&gt;
+
+&lt;h3 id=&#34;cluster-split:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Cluster Split&lt;/h3&gt;
+
+&lt;p&gt;Cluster consensus requires at least two nodes; and thus three nodes are needed to create a resilient cluster. In case of a cluster split there will be one part that can achieve consensus, and move forward. However, there are two scenarios that are interesting to look into.&lt;/p&gt;
+
+&lt;h4 id=&#34;leader-in-majority-part:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader in Majority Part&lt;/h4&gt;
+
+&lt;p&gt;The leader is in the part of the cluster that can reach consensus - That part will continue to work and move forward. In the other part a new leader can not be elected as consensus can not be reached. When the cluster split is resolved the log entries will replicate to the follower that was on the &amp;ldquo;wrong&amp;rdquo; side of the split.&lt;/p&gt;
+
+&lt;h4 id=&#34;leader-in-minority-part:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader in Minority Part&lt;/h4&gt;
+
+&lt;p&gt;The leader is in the part of the cluster that can not reach consensus - Proposed changes to the original leader will be entered in the log and replicated to the followers; however the change can not be committed and that part of the cluster can not move forward. At the same time, on the other side of the cluster a leader election will start, due to the lack of leader, and the term will increment and a leader will be elected. The increment in election term here is important. Now when there a leader, and enough nodes for consensus, this part of the cluster can start to move forward.&lt;/p&gt;
+
+&lt;p&gt;When the cluster split is resolved there will be two leaders. However, the leader with the lower &lt;em&gt;term&lt;/em&gt; will now have uncommitted entries in the log. When it reseive a message from the leader with a higher &lt;em&gt;term&lt;/em&gt; it will roll back the log entries and start to commit the log entries from the leader with higher &lt;em&gt;term&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Next part will be a practical introduction to the Raft algorithm in etcd.&lt;/p&gt;
+</description>
+    </item>
+    
+    
+    
+    
+    
+    
+  </channel>
+</rss>
