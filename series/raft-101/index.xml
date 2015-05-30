@@ -24,17 +24,17 @@
 
 &lt;h3 id=&#34;creating-a-basic-node:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Creating a Basic Node&lt;/h3&gt;
 
-&lt;p&gt;Clusters are built by nodes, so lets start of by defining a node. For the node we initially only need to keep track of the raft. Bellow is a minimal implementation of the node type and a constructor function.&lt;/p&gt;
+&lt;p&gt;Clusters are built by nodes, so lets start of by defining a node. Initially the node only needs to keep track of the raft and the persistent storage. Below is a minimal implementation of the node type and its constructor function.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;  const hb = 1
 
   type node struct {
     // the raft that the cluster node will use
-    // this include the WAL
+    // this includes the WAL
   	raft      raft.Node
 
     // pstore is a fake implementation of a persistent storage
-    // that will be used side-by-side the WAL in the raft
+    // that will be used side-by-side with the WAL in the raft
     pstore    map[string]string
   }
 
@@ -59,16 +59,16 @@
 
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;With the node come some responsibilities:&lt;/p&gt;
+&lt;p&gt;With the node comes some responsibilities:&lt;/p&gt;
 
 &lt;ol&gt;
 &lt;li&gt;Read from &lt;code&gt;Node.Ready()&lt;/code&gt; channel and process the updates.&lt;/li&gt;
-&lt;li&gt;All persisted log entries must be made available via an implementation of the Storage interface. This can be solved by using the provided MemoryStorage type, if its repopulated upon restart; or by implementing a disked backed implementation. In this example we will not implement this part.&lt;/li&gt;
+&lt;li&gt;All persisted log entries must be made available via an implementation of the Storage interface. This can be solved by using the provided MemoryStorage type, if it is repopulated upon restart; or by implementing a disked backed implementation. In this example we will not implement this part.&lt;/li&gt;
 &lt;li&gt;Call &lt;code&gt;Node.Step()&lt;/code&gt; when receiving a message from another node.&lt;/li&gt;
 &lt;li&gt;Call &lt;code&gt;Node.Tick()&lt;/code&gt; at regular intervals. Internally the raft time is represented by an abstract &lt;em&gt;tick&lt;/em&gt;, that controls two important timeouts, the heartbeat and election timeout.&lt;/li&gt;
 &lt;/ol&gt;
 
-&lt;p&gt;So the our state machine main loop will loop will look like this:&lt;/p&gt;
+&lt;p&gt;So the state machine main loop will look like this:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) run() {
 	n.ticker = time.Tick(time.Second)
@@ -88,25 +88,25 @@
 
 &lt;h3 id=&#34;handling-raft-ready-events:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Handling Raft Ready Events&lt;/h3&gt;
 
-&lt;p&gt;Above we left out a large part of the control loop, that is processing the updates from the Node.Ready() channel. When receiving a message there are also 4 important tasks:&lt;/p&gt;
+&lt;p&gt;Above a large part of the control loop is left out, that is the processing of updates from the Node.Ready() channel. When receiving a message there are four important tasks:&lt;/p&gt;
 
 &lt;ol&gt;
-&lt;li&gt;&lt;p&gt;Write &lt;code&gt;HardState&lt;/code&gt;, &lt;code&gt;Entries&lt;/code&gt; and &lt;code&gt;Snapshot&lt;/code&gt; to persistent storage. &lt;strong&gt;Note!&lt;/strong&gt; When writing to storage it is important to check that the Entry Index (i). If previously persisted entries with Index &amp;gt;= i exists, those entries needs to be discarded. For instance this can happen if we get a cluster split with the leader in the minority part; because then the cluster can advance in the other part.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Write &lt;code&gt;HardState&lt;/code&gt;, &lt;code&gt;Entries&lt;/code&gt; and &lt;code&gt;Snapshot&lt;/code&gt; to persistent storage. &lt;strong&gt;Note!&lt;/strong&gt; When writing to storage it is important to check the Entry Index (i). If previously persisted entries with Index &amp;gt;= i exist, those entries needs to be discarded. For instance this can happen if we get a cluster split with the leader in the minority part; because then the cluster can advance in the other part.&lt;/p&gt;&lt;/li&gt;
 
 &lt;li&gt;&lt;p&gt;Send all messages to the nodes named in the &lt;code&gt;To&lt;/code&gt; field. &lt;strong&gt;Note!&lt;/strong&gt; It is important to not send any messages until:&lt;/p&gt;
 
 &lt;ul&gt;
 &lt;li&gt;the latest HardState has been persisted&lt;/li&gt;
-&lt;li&gt;all Entries from previous batch has been persisted (messages from the current batch can be sent and persisted in parallel)&lt;/li&gt;
+&lt;li&gt;all Entries from previous batch have been persisted (messages from the current batch can be sent and persisted in parallel)&lt;/li&gt;
 &lt;li&gt;call &lt;code&gt;Node.ReportSnapshot()&lt;/code&gt; if any message has type &lt;code&gt;MsgSnap&lt;/code&gt; and the snapshot has been sent&lt;/li&gt;
 &lt;/ul&gt;&lt;/li&gt;
 
-&lt;li&gt;&lt;p&gt;Apply &lt;code&gt;Snapshot&lt;/code&gt; and &lt;code&gt;CommitedEntries&lt;/code&gt; to the state machine. If any commited Entry has the type &lt;code&gt;EntryConfChange&lt;/code&gt; call &lt;code&gt;Node.ApplyConfChange&lt;/code&gt; to actually apply it to the node. The configuration change can be canceled at this point by setting the &lt;code&gt;NodeId&lt;/code&gt; field to zero before calling &lt;code&gt;ApplyConfChange&lt;/code&gt;. Either way, &lt;code&gt;ApplyConfChange&lt;/code&gt; must be called; and the decision to cancel must be based solely on the state machine and not on external information, for instance observed health state of a node.&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Apply &lt;code&gt;Snapshot&lt;/code&gt; and &lt;code&gt;CommitedEntries&lt;/code&gt; to the state machine. If any committed Entry has the type &lt;code&gt;EntryConfChange&lt;/code&gt; call &lt;code&gt;Node.ApplyConfChange&lt;/code&gt; to actually apply it to the node. The configuration change can be canceled at this point by setting the &lt;code&gt;NodeId&lt;/code&gt; field to zero before calling &lt;code&gt;ApplyConfChange&lt;/code&gt;. Either way, &lt;code&gt;ApplyConfChange&lt;/code&gt; must be called; and the decision to cancel must be based solely on the state machine and not on external information, for instance observed health state of a node.&lt;/p&gt;&lt;/li&gt;
 
-&lt;li&gt;&lt;p&gt;Call Node.Advance() to signal that we are ready for the next batch. This can be done any time after step 1 finished. &lt;strong&gt;Note!&lt;/strong&gt; All updates must be processed in the order they were received by &lt;code&gt;Node.Ready()&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;&lt;p&gt;Call Node.Advance() to signal readiness for the next batch. This can be done any time after step 1 is finished. &lt;strong&gt;Note!&lt;/strong&gt; All updates must be processed in the order they were received by &lt;code&gt;Node.Ready()&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
 &lt;/ol&gt;
 
-&lt;p&gt;The 4 tasks above can be done in parallel as long as all notices above are fulfilled. In the example bellow &lt;code&gt;rd&lt;/code&gt; is of the type &lt;code&gt;raft.Ready&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;The four tasks above can be done in parallel as long as all notices above are fulfilled. In the example below &lt;code&gt;rd&lt;/code&gt; is of the type &lt;code&gt;raft.Ready&lt;/code&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;n.saveToStorage(rd.HardState, rd.Entries, rd.Snapshot) // (1)
 n.send(rd.Messages) // (2)
@@ -124,7 +124,7 @@ for _, entry := range rd.CommittedEntries {
 n.raft.Advance() // (4)
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;Before carrying on we should look into the &lt;code&gt;raft.Ready&lt;/code&gt; type. Please note that &lt;code&gt;pb&lt;/code&gt; bellow is actually &lt;code&gt;raftpb&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Below is the &lt;code&gt;raft.Ready&lt;/code&gt; type, please note that &lt;code&gt;pb&lt;/code&gt; is actually &lt;code&gt;raftpb&lt;/code&gt;.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type Ready struct {
     // The current volatile state of a Node.
@@ -160,10 +160,10 @@ n.raft.Advance() // (4)
 
 &lt;h4 id=&#34;save-to-storage:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Save To Storage&lt;/h4&gt;
 
-&lt;p&gt;Saving to storage is not so advance if a simplistic example like this:&lt;/p&gt;
+&lt;p&gt;Saving to storage is not so advanced in a simplistic example like this:&lt;/p&gt;
 
 &lt;ol&gt;
-&lt;li&gt;Append the entries - this is basically the message to be commited&lt;/li&gt;
+&lt;li&gt;Append the entries - this is basically the message to be committed&lt;/li&gt;
 &lt;li&gt;Set the hard state - this will commit the message&lt;/li&gt;
 &lt;li&gt;Apply the snapshot - this overwrites the storage with the given snapshot&lt;/li&gt;
 &lt;/ol&gt;
@@ -183,7 +183,7 @@ n.raft.Advance() // (4)
 
 &lt;h4 id=&#34;send:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Send&lt;/h4&gt;
 
-&lt;p&gt;For now the RPC will be simulated with an global map which holds the nodes. So with the send function we will also create a receive function. Note, the &lt;code&gt;receive()&lt;/code&gt; function calls &lt;code&gt;raft.Step()&lt;/code&gt; and that is crucial to advance the state machine.&lt;/p&gt;
+&lt;p&gt;For now the RPC will be simulated with a global map which holds the nodes. With the send function there is also a matching receive function. Note, the &lt;code&gt;receive()&lt;/code&gt; function calls &lt;code&gt;raft.Step()&lt;/code&gt;, and that is crucial to advance the state machine.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) send(messages []raftpb.Message) {
 	for _, m := range messages {
@@ -202,7 +202,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 &lt;h4 id=&#34;process-raft-entry:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Process Raft Entry&lt;/h4&gt;
 
-&lt;p&gt;If &lt;code&gt;entry.Type&lt;/code&gt; of the &lt;code&gt;raftpb.Entry&lt;/code&gt; is &lt;code&gt;raftpb.EntryNormal&lt;/code&gt; we need to process the message. The message will be encoded in &lt;code&gt;entry.Data&lt;/code&gt;. Our protocol bellow is very simple, and is on the form &lt;em&gt;key:value&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;If &lt;code&gt;entry.Type&lt;/code&gt; of the &lt;code&gt;raftpb.Entry&lt;/code&gt; is &lt;code&gt;raftpb.EntryNormal&lt;/code&gt; the message should be processed. The message will be encoded in &lt;code&gt;entry.Data&lt;/code&gt;. The protocol below is very simple, and is a string on the form &lt;em&gt;key:value&lt;/em&gt;&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) process(entry raftpb.Entry) {
 
@@ -217,7 +217,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 &lt;h4 id=&#34;process-snapshot:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Process Snapshot&lt;/h4&gt;
 
-&lt;p&gt;For now we will only make a dummy implementation of the &lt;code&gt;processSnapshot&lt;/code&gt; function. But basicly we only have to write over our fake persistent storage.&lt;/p&gt;
+&lt;p&gt;For now &lt;code&gt;processSnapshot&lt;/code&gt; will only be a dummy implementation. But basically it should only overwrite the the current persistent storage.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) processSnapshot(snapshot raftpb.Snapshot) {
 	log.Printf(&amp;quot;Applying snapshot on %v is not implemenetd yet&amp;quot;)
@@ -226,14 +226,14 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 &lt;h4 id=&#34;advance-the-raft:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Advance the Raft&lt;/h4&gt;
 
-&lt;p&gt;At this point the only thing left is calling &lt;code&gt;Node.Advance()&lt;/code&gt;, this signals that we are redy for the next batch. Please note that &lt;em&gt;all&lt;/em&gt; updates must be processed in the order they were received by &lt;code&gt;Node.Ready&lt;/code&gt;.  In our example it looks like this:&lt;/p&gt;
+&lt;p&gt;At this point the only thing left to do is calling &lt;code&gt;Node.Advance()&lt;/code&gt;, this signals that the node is ready for the next batch. Please note that &lt;em&gt;all&lt;/em&gt; updates must be processed in the order they were received from &lt;code&gt;Node.Ready&lt;/code&gt;. In our example it looks like this:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;n.raft.Advance()
 &lt;/code&gt;&lt;/pre&gt;
 
 &lt;h3 id=&#34;using-the-raft:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Using the Raft&lt;/h3&gt;
 
-&lt;p&gt;So finally the time has come to start up a couple of nodes an connect them to a cluster. Bellow we are starting nodes by announcing a predefined peer definition. Lastly we tell one of the nodes to start an election campaign, that is not necessary but it saves us some time as we do not need to wait for the election timeout. &lt;strong&gt;Note!&lt;/strong&gt; At this point we do not have a resilient cluster, because if we loose one of the nodes there is no way to reach a majority consensus.&lt;/p&gt;
+&lt;p&gt;Finally it is time to start up a couple of nodes and connect them to a cluster. Below the nodes are started with predefined peers. Lastly &lt;code&gt;Node.Campaign&lt;/code&gt; is called to start an election campaign; it is not necessary but it saves some time, as we do not need to wait for the election timeout. &lt;strong&gt;Note!&lt;/strong&gt; At this point we do not have a resilient cluster, because if a node is lost there is no way to reach a majority consensus.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[1] = newNode(1, []raft.Peer{{ID: 1}, {ID: 2}})
 go nodes[1].run()
@@ -244,7 +244,7 @@ go nodes[2].run()
 nodes[1].raft.Campaign(nodes[1].ctx)
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;However, we do not always now in advance the nodes in the cluster, so we need to be able to add nodes at a later point as well. So when creating this node it will not have any peers. Then we propose a configuration change to one of the nodes in the cluster. When the configuration change has been committed the cluster is fault tolerant.&lt;/p&gt;
+&lt;p&gt;However, all nodes in the cluster can not be known in advance. Below a node is created and added to a running cluster. It is created without any peers and a configuration change is proposed to the cluster. When the configuration change has been committed, the cluster is fault tolerant.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[3] = newNode(3, []raft.Peer{})
 go nodes[3].run()
@@ -256,14 +256,14 @@ nodes[2].raft.ProposeConfChange(nodes[2].ctx, raftpb.ConfChange{
 })
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;Next up is writing some data to the cluster, that is also done by proposing the change to the cluster. Each of the writes are done to different nodes in the cluster.&lt;/p&gt;
+&lt;p&gt;Next up is writing data to the cluster, that is also done by proposing a change to the cluster. Each of the writes are done to different nodes in the cluster.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[1].node.Propose(nodes[1].ctx, []byte(&amp;quot;key1:value1&amp;quot;))
 nodes[2].node.Propose(nodes[2].ctx, []byte(&amp;quot;key2:value2&amp;quot;))
 nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;Lets dump the data on the nodes to see that they have been synchronized properly.&lt;/p&gt;
+&lt;p&gt;Dumping the data on the nodes reveals if they have been synchronized properly.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;for i, node := range nodes {
   fmt.Printf(&amp;quot;** Node %v **\n&amp;quot;, i)
@@ -274,7 +274,7 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;If we at this point added another node to the cluster the data would be replicated to the newly added node.&lt;/p&gt;
+&lt;p&gt;If a node is added to the cluster, data will be replicated to the newly added node by replaying the log.&lt;/p&gt;
 </description>
     </item>
     
@@ -288,31 +288,31 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
       <guid>http://otm.github.io/2015/05/the-raft-algorithm/</guid>
       <description>
 
-&lt;p&gt;The Raft consensus algorithm provides a understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or alternative to an algorithm called Paxos.&lt;/p&gt;
+&lt;p&gt;The Raft consensus algorithm provides an understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or an alternative, to an algorithm called Paxos.&lt;/p&gt;
 
-&lt;p&gt;A node in the cluster can have three states: follower, candidate, or leader. Consensus in the cluster is maintained by the leader, and is responsible for log replication. To become the leader a node will change it&amp;rsquo;s status from follower to candidate.&lt;/p&gt;
+&lt;p&gt;A node in the cluster can have three states: follower, candidate, or leader. Consensus in the cluster is maintained by the leader, which is responsible for log replication. To become the leader a node will change its status from follower to candidate.&lt;/p&gt;
 
 &lt;h3 id=&#34;leader-election:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader Election&lt;/h3&gt;
 
-&lt;p&gt;The leader in the cluster send heartbeat messages to the followers. If a follower does not receive a heartbeat within the election timeout it will transition state from follower to candidate. The candidate start a new election term and increases the &lt;em&gt;term&lt;/em&gt; counter, vote for itself and send a &lt;em&gt;RequestVote&lt;/em&gt; message to the cluster members. A member node will vote on the first candidate that sends a &lt;em&gt;RequestVote&lt;/em&gt; message, and it will only vote once during a &lt;em&gt;term&lt;/em&gt;. At this point there are three scenarios in the cluster:&lt;/p&gt;
+&lt;p&gt;The leader in the cluster sends heartbeat messages to the followers. If a follower does not receive a heartbeat within the election timeout it will transition state from follower to candidate. The candidate starts a new election term and increases the &lt;em&gt;term&lt;/em&gt; counter, votes for itself and sends a &lt;em&gt;RequestVote&lt;/em&gt; message to the cluster members. A member node will vote on the first candidate that sends a &lt;em&gt;RequestVote&lt;/em&gt; message, and it will only vote once during a &lt;em&gt;term&lt;/em&gt;. At this point there are three scenarios in the cluster:&lt;/p&gt;
 
 &lt;ol&gt;
-&lt;li&gt;The candidate receive a message from a leader with equal or higher &lt;em&gt;term&lt;/em&gt; - and transition from candidate to flower.&lt;/li&gt;
-&lt;li&gt;The candidate receive a majority of the votes - and transition from candidate to leader.&lt;/li&gt;
-&lt;li&gt;The candidate&amp;rsquo;s election times out - and transition form candidate to follower.&lt;/li&gt;
+&lt;li&gt;The candidate receives a message from a leader with equal or higher &lt;em&gt;term&lt;/em&gt; - and transitions from candidate to flower.&lt;/li&gt;
+&lt;li&gt;The candidate receives a majority of the votes - and transitions from candidate to leader.&lt;/li&gt;
+&lt;li&gt;The candidate&amp;rsquo;s election times out - and transitions from candidate to follower.&lt;/li&gt;
 &lt;/ol&gt;
 
 &lt;h3 id=&#34;log-replication:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Log Replication&lt;/h3&gt;
 
-&lt;p&gt;All changes goes through the leader, leader get proposal, creates a log entry (uncommited), then replicate the entry to the followers, when a majority has written the log entry and commits the entry (the leader state has now changed), the leader notifies the followers that the entry is committed. At this point the cluster is in consensus.&lt;/p&gt;
+&lt;p&gt;All changes go through the leader, leader gets proposal, creates a log entry (uncommited), then replicates the entry to the followers, when a majority of the followers have written the log entry the leader commits it (the leaders state has now changed), the leader notifies the followers that the entry has been committed. At this point the cluster is in consensus.&lt;/p&gt;
 
 &lt;h3 id=&#34;log-replication-1:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Log replication&lt;/h3&gt;
 
-&lt;p&gt;Once there is a leader the cluster can move forward. All changes goes through the leader, however followers can propose a change to the leader. When the leader is updated it creates a log entry, which is uncommited; the leader replicates the log entry to the followers in an &lt;em&gt;AppendEntries&lt;/em&gt; message. When a majority of followers has written the log entry, the leader will commit the pending entry; the leader state has now changed and notifies the followers that the entry is committed. At this point the cluster is in consensus and has moved forward.&lt;/p&gt;
+&lt;p&gt;Once there is a leader the cluster can move forward. All changes go through the leader, however followers can propose a change to the leader. When the leader is updated it creates a log entry, which is uncommited; the leader replicates the log entry to the followers in an &lt;em&gt;AppendEntries&lt;/em&gt; message. When a majority of followers has written the log entry, the leader will commit the pending entry; the leader state has now changed and notifies the followers that the entry is committed. At this point the cluster is in consensus and has moved forward.&lt;/p&gt;
 
 &lt;h3 id=&#34;cluster-split:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Cluster Split&lt;/h3&gt;
 
-&lt;p&gt;Cluster consensus requires at least two nodes; and thus three nodes are needed to create a resilient cluster. In case of a cluster split there will be one part that can achieve consensus, and move forward. However, there are two scenarios that are interesting to look into.&lt;/p&gt;
+&lt;p&gt;Cluster consensus requires at least two nodes; thus three nodes are needed to create a resilient cluster. In case of a cluster split there will be one part that can achieve consensus, and move forward. However, there are two scenarios that are interesting to look into.&lt;/p&gt;
 
 &lt;h4 id=&#34;leader-in-majority-part:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader in Majority Part&lt;/h4&gt;
 
@@ -320,9 +320,9 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
 
 &lt;h4 id=&#34;leader-in-minority-part:3615e096b6b5dd4aa55f32d60f44baab&#34;&gt;Leader in Minority Part&lt;/h4&gt;
 
-&lt;p&gt;The leader is in the part of the cluster that can not reach consensus - Proposed changes to the original leader will be entered in the log and replicated to the followers; however the change can not be committed and that part of the cluster can not move forward. At the same time, on the other side of the cluster a leader election will start, due to the lack of leader, and the term will increment and a leader will be elected. The increment in election term here is important. Now when there a leader, and enough nodes for consensus, this part of the cluster can start to move forward.&lt;/p&gt;
+&lt;p&gt;The leader is in the part of the cluster that can not reach consensus - Proposed changes to the original leader will be entered in the log and replicated to the followers; however the change can not be committed and that part of the cluster can not move forward. At the same time, on the other side of the cluster a leader election will start, due to the lack of leader, and the term will increment and a leader will be elected. The increment in election term here is important. Now when there is a leader, and enough nodes for consensus, this part of the cluster can start to move forward.&lt;/p&gt;
 
-&lt;p&gt;When the cluster split is resolved there will be two leaders. However, the leader with the lower &lt;em&gt;term&lt;/em&gt; will now have uncommitted entries in the log. When it reseive a message from the leader with a higher &lt;em&gt;term&lt;/em&gt; it will roll back the log entries and start to commit the log entries from the leader with higher &lt;em&gt;term&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;When the cluster split is resolved there will be two leaders. However, the leader with the lower &lt;em&gt;term&lt;/em&gt; will now have uncommitted entries in the log. When it reseives a message from the leader with a higher &lt;em&gt;term&lt;/em&gt; it will roll back the log entries and start to commit the log entries from the leader with higher &lt;em&gt;term&lt;/em&gt;.&lt;/p&gt;
 
 &lt;p&gt;Next part will be a practical introduction to the Raft algorithm in etcd.&lt;/p&gt;
 </description>

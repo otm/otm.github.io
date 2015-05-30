@@ -97,17 +97,17 @@
 
 <h3 id="creating-a-basic-node:91623121bcc5f99f9298f5ee8624ca3c">Creating a Basic Node</h3>
 
-<p>Clusters are built by nodes, so lets start of by defining a node. For the node we initially only need to keep track of the raft. Bellow is a minimal implementation of the node type and a constructor function.</p>
+<p>Clusters are built by nodes, so lets start of by defining a node. Initially the node only needs to keep track of the raft and the persistent storage. Below is a minimal implementation of the node type and its constructor function.</p>
 
 <pre><code class="language-go">  const hb = 1
 
   type node struct {
     // the raft that the cluster node will use
-    // this include the WAL
+    // this includes the WAL
   	raft      raft.Node
 
     // pstore is a fake implementation of a persistent storage
-    // that will be used side-by-side the WAL in the raft
+    // that will be used side-by-side with the WAL in the raft
     pstore    map[string]string
   }
 
@@ -132,16 +132,16 @@
 
 </code></pre>
 
-<p>With the node come some responsibilities:</p>
+<p>With the node comes some responsibilities:</p>
 
 <ol>
 <li>Read from <code>Node.Ready()</code> channel and process the updates.</li>
-<li>All persisted log entries must be made available via an implementation of the Storage interface. This can be solved by using the provided MemoryStorage type, if its repopulated upon restart; or by implementing a disked backed implementation. In this example we will not implement this part.</li>
+<li>All persisted log entries must be made available via an implementation of the Storage interface. This can be solved by using the provided MemoryStorage type, if it is repopulated upon restart; or by implementing a disked backed implementation. In this example we will not implement this part.</li>
 <li>Call <code>Node.Step()</code> when receiving a message from another node.</li>
 <li>Call <code>Node.Tick()</code> at regular intervals. Internally the raft time is represented by an abstract <em>tick</em>, that controls two important timeouts, the heartbeat and election timeout.</li>
 </ol>
 
-<p>So the our state machine main loop will loop will look like this:</p>
+<p>So the state machine main loop will look like this:</p>
 
 <pre><code class="language-go">func (n *node) run() {
 	n.ticker = time.Tick(time.Second)
@@ -161,25 +161,25 @@
 
 <h3 id="handling-raft-ready-events:91623121bcc5f99f9298f5ee8624ca3c">Handling Raft Ready Events</h3>
 
-<p>Above we left out a large part of the control loop, that is processing the updates from the Node.Ready() channel. When receiving a message there are also 4 important tasks:</p>
+<p>Above a large part of the control loop is left out, that is the processing of updates from the Node.Ready() channel. When receiving a message there are four important tasks:</p>
 
 <ol>
-<li><p>Write <code>HardState</code>, <code>Entries</code> and <code>Snapshot</code> to persistent storage. <strong>Note!</strong> When writing to storage it is important to check that the Entry Index (i). If previously persisted entries with Index &gt;= i exists, those entries needs to be discarded. For instance this can happen if we get a cluster split with the leader in the minority part; because then the cluster can advance in the other part.</p></li>
+<li><p>Write <code>HardState</code>, <code>Entries</code> and <code>Snapshot</code> to persistent storage. <strong>Note!</strong> When writing to storage it is important to check the Entry Index (i). If previously persisted entries with Index &gt;= i exist, those entries needs to be discarded. For instance this can happen if we get a cluster split with the leader in the minority part; because then the cluster can advance in the other part.</p></li>
 
 <li><p>Send all messages to the nodes named in the <code>To</code> field. <strong>Note!</strong> It is important to not send any messages until:</p>
 
 <ul>
 <li>the latest HardState has been persisted</li>
-<li>all Entries from previous batch has been persisted (messages from the current batch can be sent and persisted in parallel)</li>
+<li>all Entries from previous batch have been persisted (messages from the current batch can be sent and persisted in parallel)</li>
 <li>call <code>Node.ReportSnapshot()</code> if any message has type <code>MsgSnap</code> and the snapshot has been sent</li>
 </ul></li>
 
-<li><p>Apply <code>Snapshot</code> and <code>CommitedEntries</code> to the state machine. If any commited Entry has the type <code>EntryConfChange</code> call <code>Node.ApplyConfChange</code> to actually apply it to the node. The configuration change can be canceled at this point by setting the <code>NodeId</code> field to zero before calling <code>ApplyConfChange</code>. Either way, <code>ApplyConfChange</code> must be called; and the decision to cancel must be based solely on the state machine and not on external information, for instance observed health state of a node.</p></li>
+<li><p>Apply <code>Snapshot</code> and <code>CommitedEntries</code> to the state machine. If any committed Entry has the type <code>EntryConfChange</code> call <code>Node.ApplyConfChange</code> to actually apply it to the node. The configuration change can be canceled at this point by setting the <code>NodeId</code> field to zero before calling <code>ApplyConfChange</code>. Either way, <code>ApplyConfChange</code> must be called; and the decision to cancel must be based solely on the state machine and not on external information, for instance observed health state of a node.</p></li>
 
-<li><p>Call Node.Advance() to signal that we are ready for the next batch. This can be done any time after step 1 finished. <strong>Note!</strong> All updates must be processed in the order they were received by <code>Node.Ready()</code></p></li>
+<li><p>Call Node.Advance() to signal readiness for the next batch. This can be done any time after step 1 is finished. <strong>Note!</strong> All updates must be processed in the order they were received by <code>Node.Ready()</code></p></li>
 </ol>
 
-<p>The 4 tasks above can be done in parallel as long as all notices above are fulfilled. In the example bellow <code>rd</code> is of the type <code>raft.Ready</code></p>
+<p>The four tasks above can be done in parallel as long as all notices above are fulfilled. In the example below <code>rd</code> is of the type <code>raft.Ready</code></p>
 
 <pre><code class="language-go">n.saveToStorage(rd.HardState, rd.Entries, rd.Snapshot) // (1)
 n.send(rd.Messages) // (2)
@@ -197,7 +197,7 @@ for _, entry := range rd.CommittedEntries {
 n.raft.Advance() // (4)
 </code></pre>
 
-<p>Before carrying on we should look into the <code>raft.Ready</code> type. Please note that <code>pb</code> bellow is actually <code>raftpb</code>.</p>
+<p>Below is the <code>raft.Ready</code> type, please note that <code>pb</code> is actually <code>raftpb</code>.</p>
 
 <pre><code class="language-go">type Ready struct {
     // The current volatile state of a Node.
@@ -233,10 +233,10 @@ n.raft.Advance() // (4)
 
 <h4 id="save-to-storage:91623121bcc5f99f9298f5ee8624ca3c">Save To Storage</h4>
 
-<p>Saving to storage is not so advance if a simplistic example like this:</p>
+<p>Saving to storage is not so advanced in a simplistic example like this:</p>
 
 <ol>
-<li>Append the entries - this is basically the message to be commited</li>
+<li>Append the entries - this is basically the message to be committed</li>
 <li>Set the hard state - this will commit the message</li>
 <li>Apply the snapshot - this overwrites the storage with the given snapshot</li>
 </ol>
@@ -256,7 +256,7 @@ n.raft.Advance() // (4)
 
 <h4 id="send:91623121bcc5f99f9298f5ee8624ca3c">Send</h4>
 
-<p>For now the RPC will be simulated with an global map which holds the nodes. So with the send function we will also create a receive function. Note, the <code>receive()</code> function calls <code>raft.Step()</code> and that is crucial to advance the state machine.</p>
+<p>For now the RPC will be simulated with a global map which holds the nodes. With the send function there is also a matching receive function. Note, the <code>receive()</code> function calls <code>raft.Step()</code>, and that is crucial to advance the state machine.</p>
 
 <pre><code class="language-go">func (n *node) send(messages []raftpb.Message) {
 	for _, m := range messages {
@@ -275,7 +275,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 <h4 id="process-raft-entry:91623121bcc5f99f9298f5ee8624ca3c">Process Raft Entry</h4>
 
-<p>If <code>entry.Type</code> of the <code>raftpb.Entry</code> is <code>raftpb.EntryNormal</code> we need to process the message. The message will be encoded in <code>entry.Data</code>. Our protocol bellow is very simple, and is on the form <em>key:value</em></p>
+<p>If <code>entry.Type</code> of the <code>raftpb.Entry</code> is <code>raftpb.EntryNormal</code> the message should be processed. The message will be encoded in <code>entry.Data</code>. The protocol below is very simple, and is a string on the form <em>key:value</em></p>
 
 <pre><code class="language-go">func (n *node) process(entry raftpb.Entry) {
 
@@ -290,7 +290,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 <h4 id="process-snapshot:91623121bcc5f99f9298f5ee8624ca3c">Process Snapshot</h4>
 
-<p>For now we will only make a dummy implementation of the <code>processSnapshot</code> function. But basicly we only have to write over our fake persistent storage.</p>
+<p>For now <code>processSnapshot</code> will only be a dummy implementation. But basically it should only overwrite the the current persistent storage.</p>
 
 <pre><code class="language-go">func (n *node) processSnapshot(snapshot raftpb.Snapshot) {
 	log.Printf(&quot;Applying snapshot on %v is not implemenetd yet&quot;)
@@ -299,14 +299,14 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 <h4 id="advance-the-raft:91623121bcc5f99f9298f5ee8624ca3c">Advance the Raft</h4>
 
-<p>At this point the only thing left is calling <code>Node.Advance()</code>, this signals that we are redy for the next batch. Please note that <em>all</em> updates must be processed in the order they were received by <code>Node.Ready</code>.  In our example it looks like this:</p>
+<p>At this point the only thing left to do is calling <code>Node.Advance()</code>, this signals that the node is ready for the next batch. Please note that <em>all</em> updates must be processed in the order they were received from <code>Node.Ready</code>. In our example it looks like this:</p>
 
 <pre><code class="language-go">n.raft.Advance()
 </code></pre>
 
 <h3 id="using-the-raft:91623121bcc5f99f9298f5ee8624ca3c">Using the Raft</h3>
 
-<p>So finally the time has come to start up a couple of nodes an connect them to a cluster. Bellow we are starting nodes by announcing a predefined peer definition. Lastly we tell one of the nodes to start an election campaign, that is not necessary but it saves us some time as we do not need to wait for the election timeout. <strong>Note!</strong> At this point we do not have a resilient cluster, because if we loose one of the nodes there is no way to reach a majority consensus.</p>
+<p>Finally it is time to start up a couple of nodes and connect them to a cluster. Below the nodes are started with predefined peers. Lastly <code>Node.Campaign</code> is called to start an election campaign; it is not necessary but it saves some time, as we do not need to wait for the election timeout. <strong>Note!</strong> At this point we do not have a resilient cluster, because if a node is lost there is no way to reach a majority consensus.</p>
 
 <pre><code class="language-go">nodes[1] = newNode(1, []raft.Peer{{ID: 1}, {ID: 2}})
 go nodes[1].run()
@@ -317,7 +317,7 @@ go nodes[2].run()
 nodes[1].raft.Campaign(nodes[1].ctx)
 </code></pre>
 
-<p>However, we do not always now in advance the nodes in the cluster, so we need to be able to add nodes at a later point as well. So when creating this node it will not have any peers. Then we propose a configuration change to one of the nodes in the cluster. When the configuration change has been committed the cluster is fault tolerant.</p>
+<p>However, all nodes in the cluster can not be known in advance. Below a node is created and added to a running cluster. It is created without any peers and a configuration change is proposed to the cluster. When the configuration change has been committed, the cluster is fault tolerant.</p>
 
 <pre><code class="language-go">nodes[3] = newNode(3, []raft.Peer{})
 go nodes[3].run()
@@ -329,14 +329,14 @@ nodes[2].raft.ProposeConfChange(nodes[2].ctx, raftpb.ConfChange{
 })
 </code></pre>
 
-<p>Next up is writing some data to the cluster, that is also done by proposing the change to the cluster. Each of the writes are done to different nodes in the cluster.</p>
+<p>Next up is writing data to the cluster, that is also done by proposing a change to the cluster. Each of the writes are done to different nodes in the cluster.</p>
 
 <pre><code class="language-go">nodes[1].node.Propose(nodes[1].ctx, []byte(&quot;key1:value1&quot;))
 nodes[2].node.Propose(nodes[2].ctx, []byte(&quot;key2:value2&quot;))
 nodes[3].node.Propose(nodes[3].ctx, []byte(&quot;key3:value3&quot;))
 </code></pre>
 
-<p>Lets dump the data on the nodes to see that they have been synchronized properly.</p>
+<p>Dumping the data on the nodes reveals if they have been synchronized properly.</p>
 
 <pre><code class="language-go">for i, node := range nodes {
   fmt.Printf(&quot;** Node %v **\n&quot;, i)
@@ -347,7 +347,7 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&quot;key3:value3&quot;))
 }
 </code></pre>
 
-<p>If we at this point added another node to the cluster the data would be replicated to the newly added node.</p>
+<p>If a node is added to the cluster, data will be replicated to the newly added node by replaying the log.</p>
 
 
 
