@@ -7,7 +7,277 @@
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>
-    <updated>Wed, 27 May 2015 22:24:16 CEST</updated>
+    <updated>Sat, 30 May 2015 15:28:10 CEST</updated>
+    
+    
+    <item>
+      <title>Raft: A First Implementation</title>
+      <link>http://otm.github.io/2015/05/raft-a-first-implementation/</link>
+      <pubDate>Sat, 30 May 2015 15:28:10 CEST</pubDate>
+      <author>Nils Lagerkvist</author>
+      <guid>http://otm.github.io/2015/05/raft-a-first-implementation/</guid>
+      <description>
+
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;tl;dr In this part we will implement a very simplistic cluster node using the etcd raft implementation. And with the node implementation we will start up a small cluster.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;The complete source to this post can be found at &lt;a href=&#34;http://github.com/otm/raft-part-1&#34;&gt;http://github.com/otm/raft-part-1&lt;/a&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;creating-a-basic-node:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Creating a Basic Node&lt;/h3&gt;
+
+&lt;p&gt;Clusters are built by nodes, so lets start of by defining a node. For the node we initially only need to keep track of the raft. Bellow is a minimal implementation of the node type and a constructor function.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;  const hb = 1
+
+  type node struct {
+    // the raft that the cluster node will use
+    // this include the WAL
+  	raft      raft.Node
+
+    // pstore is a fake implementation of a persistent storage
+    // that will be used side-by-side the WAL in the raft
+    pstore    map[string]string
+  }
+
+  func newNode(id int, peers []raft.Peer) *node {
+    n := &amp;amp;node{
+      id: id,
+      cfg: &amp;amp;raft.Config{
+    		ID:              uint64(id),
+    		ElectionTick:    10 * hb,
+        HeartbeatTick:   hb,
+    		Storage:         raft.NewMemoryStorage(),
+    		MaxSizePerMsg:   math.MaxUint16,
+    		MaxInflightMsgs: 256,
+    	},
+      pstore: make(map[string]string),
+    }
+
+    n.raft = raft.StartNode(n.cfg, peers)
+
+  	return n
+  }
+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;With the node come some responsibilities:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;Read from &lt;code&gt;Node.Ready()&lt;/code&gt; channel and process the updates.&lt;/li&gt;
+&lt;li&gt;All persisted log entries must be made available via an implementation of the Storage interface. This can be solved by using the provided MemoryStorage type, if its repopulated upon restart; or by implementing a disked backed implementation. In this example we will not implement this part.&lt;/li&gt;
+&lt;li&gt;Call &lt;code&gt;Node.Step()&lt;/code&gt; when receiving a message from another node.&lt;/li&gt;
+&lt;li&gt;Call &lt;code&gt;Node.Tick()&lt;/code&gt; at regular intervals. Internally the raft time is represented by an abstract &lt;em&gt;tick&lt;/em&gt;, that controls two important timeouts, the heartbeat and election timeout.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;So the our state machine main loop will loop will look like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) run() {
+	n.ticker = time.Tick(time.Second)
+	for {
+		select {
+		case &amp;lt;-n.ticker:
+      // Point (4) above
+			n.raft.Tick()
+		case rd := &amp;lt;-n.raft.Ready():
+			// Point (2) above
+		case &amp;lt;-n.done:
+			return
+		}
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;handling-raft-ready-events:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Handling Raft Ready Events&lt;/h3&gt;
+
+&lt;p&gt;Above we left out a large part of the control loop, that is processing the updates from the Node.Ready() channel. When receiving a message there are also 4 important tasks:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;&lt;p&gt;Write &lt;code&gt;HardState&lt;/code&gt;, &lt;code&gt;Entries&lt;/code&gt; and &lt;code&gt;Snapshot&lt;/code&gt; to persistent storage. &lt;strong&gt;Note!&lt;/strong&gt; When writing to storage it is important to check that the Entry Index (i). If previously persisted entries with Index &amp;gt;= i exists, those entries needs to be discarded. For instance this can happen if we get a cluster split with the leader in the minority part; because then the cluster can advance in the other part.&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Send all messages to the nodes named in the &lt;code&gt;To&lt;/code&gt; field. &lt;strong&gt;Note!&lt;/strong&gt; It is important to not send any messages until:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;the latest HardState has been persisted&lt;/li&gt;
+&lt;li&gt;all Entries from previous batch has been persisted (messages from the current batch can be sent and persisted in parallel)&lt;/li&gt;
+&lt;li&gt;call &lt;code&gt;Node.ReportSnapshot()&lt;/code&gt; if any message has type &lt;code&gt;MsgSnap&lt;/code&gt; and the snapshot has been sent&lt;/li&gt;
+&lt;/ul&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Apply &lt;code&gt;Snapshot&lt;/code&gt; and &lt;code&gt;CommitedEntries&lt;/code&gt; to the state machine. If any commited Entry has the type &lt;code&gt;EntryConfChange&lt;/code&gt; call &lt;code&gt;Node.ApplyConfChange&lt;/code&gt; to actually apply it to the node. The configuration change can be canceled at this point by setting the &lt;code&gt;NodeId&lt;/code&gt; field to zero before calling &lt;code&gt;ApplyConfChange&lt;/code&gt;. Either way, &lt;code&gt;ApplyConfChange&lt;/code&gt; must be called; and the decision to cancel must be based solely on the state machine and not on external information, for instance observed health state of a node.&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;Call Node.Advance() to signal that we are ready for the next batch. This can be done any time after step 1 finished. &lt;strong&gt;Note!&lt;/strong&gt; All updates must be processed in the order they were received by &lt;code&gt;Node.Ready()&lt;/code&gt;&lt;/p&gt;&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;The 4 tasks above can be done in parallel as long as all notices above are fulfilled. In the example bellow &lt;code&gt;rd&lt;/code&gt; is of the type &lt;code&gt;raft.Ready&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;n.saveToStorage(rd.HardState, rd.Entries, rd.Snapshot) // (1)
+n.send(rd.Messages) // (2)
+if !raft.IsEmptySnap(rd.Snapshot) {
+  n.processSnapshot(rd.Snapshot)  //(3)
+}
+for _, entry := range rd.CommittedEntries {
+  n.process(entry) // (3)
+  if entry.Type == raftpb.EntryConfChange {
+    var cc raftpb.ConfChange
+    cc.Unmarshal(entry.Data)
+    n.node.ApplyConfChange(cc) // (3)
+  }
+}
+n.raft.Advance() // (4)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Before carrying on we should look into the &lt;code&gt;raft.Ready&lt;/code&gt; type. Please note that &lt;code&gt;pb&lt;/code&gt; bellow is actually &lt;code&gt;raftpb&lt;/code&gt;.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type Ready struct {
+    // The current volatile state of a Node.
+    // SoftState will be nil if there is no update.
+    // It is not required to consume or store SoftState
+    // It is useful for logging and debugging
+    *SoftState
+
+    // The current state of a Node to be saved to stable storage BEFORE
+    // Messages are sent.
+    // HardState will be equal to empty state if there is no update.
+    pb.HardState
+
+    // Entries specifies entries to be saved to stable storage BEFORE
+    // Messages are sent.
+    Entries []pb.Entry
+
+    // Snapshot specifies the snapshot to be saved to stable storage.
+    Snapshot pb.Snapshot
+
+    // CommittedEntries specifies entries to be committed to a
+    // store/state-machine. These have previously been committed to stable
+    // store.
+    CommittedEntries []pb.Entry
+
+    // Messages specifies outbound messages to be sent AFTER Entries are
+    // committed to stable storage.
+    // If it contains a MsgSnap message, the application MUST report back to raft
+    // when the snapshot has been received or has failed by calling ReportSnapshot.
+    Messages []pb.Message
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;save-to-storage:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Save To Storage&lt;/h4&gt;
+
+&lt;p&gt;Saving to storage is not so advance if a simplistic example like this:&lt;/p&gt;
+
+&lt;ol&gt;
+&lt;li&gt;Append the entries - this is basically the message to be commited&lt;/li&gt;
+&lt;li&gt;Set the hard state - this will commit the message&lt;/li&gt;
+&lt;li&gt;Apply the snapshot - this overwrites the storage with the given snapshot&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry, snapshot raftpb.Snapshot) {
+	n.store.Append(entries)
+
+	if !raft.IsEmptyHardState(hardState) {
+		n.store.SetHardState(hardState)
+	}
+
+	if !raft.IsEmptySnap(snapshot) {
+		n.store.ApplySnapshot(snapshot)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;send:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Send&lt;/h4&gt;
+
+&lt;p&gt;For now the RPC will be simulated with an global map which holds the nodes. So with the send function we will also create a receive function. Note, the &lt;code&gt;receive()&lt;/code&gt; function calls &lt;code&gt;raft.Step()&lt;/code&gt; and that is crucial to advance the state machine.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) send(messages []raftpb.Message) {
+	for _, m := range messages {
+    // Inspect the message (just for fun)
+		log.Println(raft.DescribeMessage(m, nil))
+
+		// send message to other node
+		nodes[m.To].receive(n.ctx, m)
+	}
+}
+
+func (n *node) receive(ctx context.Context, message raftpb.Message) {
+	n.raft.Step(ctx, message)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;process-raft-entry:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Process Raft Entry&lt;/h4&gt;
+
+&lt;p&gt;If &lt;code&gt;entry.Type&lt;/code&gt; of the &lt;code&gt;raftpb.Entry&lt;/code&gt; is &lt;code&gt;raftpb.EntryNormal&lt;/code&gt; we need to process the message. The message will be encoded in &lt;code&gt;entry.Data&lt;/code&gt;. Our protocol bellow is very simple, and is on the form &lt;em&gt;key:value&lt;/em&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) process(entry raftpb.Entry) {
+
+	if entry.Type == raftpb.EntryNormal &amp;amp;&amp;amp; entry.Data != nil {
+		log.Println(&amp;quot;normal message:&amp;quot;, string(entry.Data))
+
+    parts := bytes.SplitN(entry.Data, []byte(&amp;quot;:&amp;quot;), 2)
+		n.pstore[string(parts[0])] = string(parts[1])
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;process-snapshot:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Process Snapshot&lt;/h4&gt;
+
+&lt;p&gt;For now we will only make a dummy implementation of the &lt;code&gt;processSnapshot&lt;/code&gt; function. But basicly we only have to write over our fake persistent storage.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) processSnapshot(snapshot raftpb.Snapshot) {
+	log.Printf(&amp;quot;Applying snapshot on %v is not implemenetd yet&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;advance-the-raft:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Advance the Raft&lt;/h4&gt;
+
+&lt;p&gt;At this point the only thing left is calling &lt;code&gt;Node.Advance()&lt;/code&gt;, this signals that we are redy for the next batch. Please note that &lt;em&gt;all&lt;/em&gt; updates must be processed in the order they were received by &lt;code&gt;Node.Ready&lt;/code&gt;.  In our example it looks like this:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;n.raft.Advance()
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;using-the-raft:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Using the Raft&lt;/h3&gt;
+
+&lt;p&gt;So finally the time has come to start up a couple of nodes an connect them to a cluster. Bellow we are starting nodes by announcing a predefined peer definition. Lastly we tell one of the nodes to start an election campaign, that is not necessary but it saves us some time as we do not need to wait for the election timeout. &lt;strong&gt;Note!&lt;/strong&gt; At this point we do not have a resilient cluster, because if we loose one of the nodes there is no way to reach a majority consensus.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[1] = newNode(1, []raft.Peer{{ID: 1}, {ID: 2}})
+go nodes[1].run()
+
+nodes[2] = newNode(2, []raft.Peer{{ID: 1}, {ID: 2}})
+go nodes[2].run()
+
+nodes[1].raft.Campaign(nodes[1].ctx)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;However, we do not always now in advance the nodes in the cluster, so we need to be able to add nodes at a later point as well. So when creating this node it will not have any peers. Then we propose a configuration change to one of the nodes in the cluster. When the configuration change has been committed the cluster is fault tolerant.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[3] = newNode(3, []raft.Peer{})
+go nodes[3].run()
+nodes[2].raft.ProposeConfChange(nodes[2].ctx, raftpb.ConfChange{
+  ID:      3,
+  Type:    raftpb.ConfChangeAddNode,
+  NodeID:  3,
+  Context: []byte(&amp;quot;&amp;quot;),
+})
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Next up is writing some data to the cluster, that is also done by proposing the change to the cluster. Each of the writes are done to different nodes in the cluster.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;nodes[1].node.Propose(nodes[1].ctx, []byte(&amp;quot;key1:value1&amp;quot;))
+nodes[2].node.Propose(nodes[2].ctx, []byte(&amp;quot;key2:value2&amp;quot;))
+nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Lets dump the data on the nodes to see that they have been synchronized properly.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;for i, node := range nodes {
+  fmt.Printf(&amp;quot;** Node %v **\n&amp;quot;, i)
+  for k, v := range node.pstore {
+    fmt.Printf(&amp;quot;%v = %v&amp;quot;, k, v)
+  }
+  fmt.Printf(&amp;quot;*************\n&amp;quot;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;If we at this point added another node to the cluster the data would be replicated to the newly added node.&lt;/p&gt;
+</description>
+    </item>
+    
     
     
     <item>

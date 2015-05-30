@@ -9,7 +9,7 @@
 
   
 
-  <title> otm.io </title>
+  <title> Raft: A First Implementation  &middot; otm.io </title>
 
   
   <link rel="stylesheet" href="http://otm.github.io/css/poole.css">
@@ -23,7 +23,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
 
   
-  <link href="http://otm.github.io/index.xml" rel="alternate" type="application/rss+xml" title="otm.io" />
+  <link href="" rel="alternate" type="application/rss+xml" title="otm.io" />
 
   <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
 
@@ -42,7 +42,7 @@
 
 <body>
 
-<div class="sidebar">
+  <div class="sidebar">
   <div class="container sidebar-sticky">
     <div class="sidebar-about">
       <h1 class="brand"><a href="http://otm.github.io">otm.io</a></h1>
@@ -81,26 +81,14 @@
 </div>
 
 
-    <div class="content container">
-<div class="posts">
-
-      
-  
-  <div class="post">
-    <h1 class="post-title">
-      <a href="http://otm.github.io/2015/05/raft-a-first-implementation/">
-        Raft: A First Implementation
-      </a>
-    </h1>
-
+  <div class="content container">
+    <div class="post">
+    <h1 class="post-title">Raft: A First Implementation</h1>
     <span class="post-date">May 30, 2015</span>
-
     
-      
-      <p class="seriesname">Series: <a href="http://otm.github.io/series/raft-101">Raft 101</a></p>
+	    
+    	<p class="seriesname">Series: <a href="http://otm.github.io/series/raft-101">Raft 101</a></p>
     
-
-
     
 
 <p><strong><em>tl;dr In this part we will implement a very simplistic cluster node using the etcd raft implementation. And with the node implementation we will start up a small cluster.</em></strong></p>
@@ -361,78 +349,52 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&quot;key3:value3&quot;))
 
 <p>If we at this point added another node to the cluster the data would be replicated to the newly added node.</p>
 
-  </div>
-  
-  
-  
-  <div class="post">
-    <h1 class="post-title">
-      <a href="http://otm.github.io/2015/05/the-raft-algorithm/">
-        The Raft Algorithm
-      </a>
-    </h1>
-
-    <span class="post-date">May 27, 2015</span>
-
-    
-      
-      <p class="seriesname">Series: <a href="http://otm.github.io/series/raft-101">Raft 101</a></p>
-    
 
 
     
+        
+	    
+	    <hr/>
+    	<p><a href="" id="series"></a>This is a post in the <b>Raft 101</b> series.<br/>
+    	Other posts in this series:</p>
+        
+        
+        <ul class="series">
+        
+            <li>May 30, 2015 -
+            
+                Raft: A First Implementation
+            
+            </li>
+        
+            <li>May 27, 2015 -
+            
+                <a href="http://otm.github.io/2015/05/the-raft-algorithm/">The Raft Algorithm </a>
+            
+            </li>
+        
+        </ul>
+	
 
-<p>The Raft consensus algorithm provides a understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or alternative to an algorithm called Paxos.</p>
+    <div id="disqus_thread"></div>
+<script type="text/javascript">
 
-<p>A node in the cluster can have three states: follower, candidate, or leader. Consensus in the cluster is maintained by the leader, and is responsible for log replication. To become the leader a node will change it&rsquo;s status from follower to candidate.</p>
+(function() {
+    
+    
+    if (window.location.hostname == "localhost") 
+        return;
 
-<h3 id="leader-election:3615e096b6b5dd4aa55f32d60f44baab">Leader Election</h3>
-
-<p>The leader in the cluster send heartbeat messages to the followers. If a follower does not receive a heartbeat within the election timeout it will transition state from follower to candidate. The candidate start a new election term and increases the <em>term</em> counter, vote for itself and send a <em>RequestVote</em> message to the cluster members. A member node will vote on the first candidate that sends a <em>RequestVote</em> message, and it will only vote once during a <em>term</em>. At this point there are three scenarios in the cluster:</p>
-
-<ol>
-<li>The candidate receive a message from a leader with equal or higher <em>term</em> - and transition from candidate to flower.</li>
-<li>The candidate receive a majority of the votes - and transition from candidate to leader.</li>
-<li>The candidate&rsquo;s election times out - and transition form candidate to follower.</li>
-</ol>
-
-<h3 id="log-replication:3615e096b6b5dd4aa55f32d60f44baab">Log Replication</h3>
-
-<p>All changes goes through the leader, leader get proposal, creates a log entry (uncommited), then replicate the entry to the followers, when a majority has written the log entry and commits the entry (the leader state has now changed), the leader notifies the followers that the entry is committed. At this point the cluster is in consensus.</p>
-
-<h3 id="log-replication-1:3615e096b6b5dd4aa55f32d60f44baab">Log replication</h3>
-
-<p>Once there is a leader the cluster can move forward. All changes goes through the leader, however followers can propose a change to the leader. When the leader is updated it creates a log entry, which is uncommited; the leader replicates the log entry to the followers in an <em>AppendEntries</em> message. When a majority of followers has written the log entry, the leader will commit the pending entry; the leader state has now changed and notifies the followers that the entry is committed. At this point the cluster is in consensus and has moved forward.</p>
-
-<h3 id="cluster-split:3615e096b6b5dd4aa55f32d60f44baab">Cluster Split</h3>
-
-<p>Cluster consensus requires at least two nodes; and thus three nodes are needed to create a resilient cluster. In case of a cluster split there will be one part that can achieve consensus, and move forward. However, there are two scenarios that are interesting to look into.</p>
-
-<h4 id="leader-in-majority-part:3615e096b6b5dd4aa55f32d60f44baab">Leader in Majority Part</h4>
-
-<p>The leader is in the part of the cluster that can reach consensus - That part will continue to work and move forward. In the other part a new leader can not be elected as consensus can not be reached. When the cluster split is resolved the log entries will replicate to the follower that was on the &ldquo;wrong&rdquo; side of the split.</p>
-
-<h4 id="leader-in-minority-part:3615e096b6b5dd4aa55f32d60f44baab">Leader in Minority Part</h4>
-
-<p>The leader is in the part of the cluster that can not reach consensus - Proposed changes to the original leader will be entered in the log and replicated to the followers; however the change can not be committed and that part of the cluster can not move forward. At the same time, on the other side of the cluster a leader election will start, due to the lack of leader, and the term will increment and a leader will be elected. The increment in election term here is important. Now when there a leader, and enough nodes for consensus, this part of the cluster can start to move forward.</p>
-
-<p>When the cluster split is resolved there will be two leaders. However, the leader with the lower <em>term</em> will now have uncommitted entries in the log. When it reseive a message from the leader with a higher <em>term</em> it will roll back the log entries and start to commit the log entries from the leader with higher <em>term</em>.</p>
-
-<p>Next part will be a practical introduction to the Raft algorithm in etcd.</p>
-
-  </div>
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'otm.io';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the comments powered by <a href="http://disqus.com/?ref_noscript">Disqus.</a></noscript>
+</div>
 </div>
 
-  <script src="/js/prism.js"></script>
-  </body>
+<script src="/js/prism.js"></script>
+</body>
 </html>
