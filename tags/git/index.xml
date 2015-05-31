@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+      <title>otm.io</title>
+      <generator uri="https://hugo.spf13.com">Hugo</generator>
+    <link>http://otm.github.io/tags/git/</link>
+    <language>en-us</language>
+    <author>Nils Lagerkvist</author>
+    <copyright>2015 Nils Lagerkvist</copyright>
+    <updated>Sun, 31 May 2015 10:42:52 CEST</updated>
+    
+    
+    <item>
+      <title>Bash Prompt for Git</title>
+      <link>http://otm.github.io/2015/05/bash-prompt-for-git/</link>
+      <pubDate>Sun, 31 May 2015 10:42:52 CEST</pubDate>
+      <author>Nils Lagerkvist</author>
+      <guid>http://otm.github.io/2015/05/bash-prompt-for-git/</guid>
+      <description>
+
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;Hacking a bash prompt that adapts when entering a git repository.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;div style=&#34;background-color: #f2dede; color: #a94442; border-color: #ebccd1; padding: 15px; border: 1px solid transparent; border-radius: 4px; margin-bottom: 1rem; font-size: 0.8rem&#34;&gt;
+&lt;img src=&#34;http://otm.github.io/images/glyphicons-197-circle-exclamation-mark.png&#34; style=&#34;display: inline-block; top: 5px; position: relative; margin: 0px 5px 0 0px&#34; alt=&#34;Disclaimer&#34;/&gt;
+Disclaimer: This is a 15min hack which might include bugs and can definitely be made more performant.
+&lt;/div&gt;
+
+&lt;p&gt;This bash hack will keep the normal prompt, and only change it when entering a directory that is tracked by git. In a git repository it will display the basename of the directory and branch. The branch name is colored accordingly:&lt;/p&gt;
+
+&lt;div style=&#34;background-color: grey; border-radius: 4px; padding: 5px 0 5px 0; margin-bottom: 1rem&#34;&gt;
+&lt;ul style=&#34;margin-bottom: 0&#34;&gt;
+  &lt;li&gt;&lt;span style=&#34;color: red&#34;&gt;Red&lt;/span&gt; - uncommitted working
+  &lt;li&gt;&lt;span style=&#34;color: yellow&#34;&gt;Yellow&lt;/span&gt; - your brancgh is ahead
+  &lt;li&gt;&lt;span style=&#34;color: green&#34;&gt;Green&lt;/span&gt; - nothing to commit
+  &lt;li&gt;&lt;span style=&#34;color: #ccaa2b&#34;&gt;Ochre&lt;/span&gt; - all other statuses
+&lt;/ul&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&#34;examples:eb94dde80e8e80ab0d0eb195da1d2d24&#34;&gt;Examples&lt;/h3&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+nils@ratchet:~/project$
+&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+Normal Directory
+&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+[go]&lt;span style=&#34;color: red&#34;&gt;(master)&lt;/span&gt;$
+&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+Non Commited
+&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+[go]&lt;span style=&#34;color: green&#34;&gt;(master)&lt;/span&gt;$
+&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+Clean
+&lt;/div&gt;
+&lt;/div&gt;
+
+&lt;h3 id=&#34;code:eb94dde80e8e80ab0d0eb195da1d2d24&#34;&gt;Code&lt;/h3&gt;
+
+&lt;p&gt;The following code should be included in the &lt;code&gt;.bashrc&lt;/code&gt; file&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;COLOR_RED=&amp;quot;\033[0;31m&amp;quot;
+COLOR_YELLOW=&amp;quot;\033[0;33m&amp;quot;
+COLOR_GREEN=&amp;quot;\033[0;32m&amp;quot;
+COLOR_OCHRE=&amp;quot;\033[38;5;95m&amp;quot;
+COLOR_BLUE=&amp;quot;\033[0;34m&amp;quot;
+COLOR_WHITE=&amp;quot;\033[0;37m&amp;quot;
+COLOR_RESET=&amp;quot;\033[0m&amp;quot;
+COLOR_RESET2=&amp;quot;\e[0m&amp;quot;
+
+function git_color {
+  local git_status=&amp;quot;$(git status 2&amp;gt; /dev/null)&amp;quot;
+
+  if [[ ! $git_status =~ &amp;quot;working directory clean&amp;quot; ]]; then
+    echo -e $COLOR_RED
+  elif [[ $git_status =~ &amp;quot;Your branch is ahead of&amp;quot; ]]; then
+    echo -e $COLOR_YELLOW
+  elif [[ $git_status =~ &amp;quot;nothing to commit&amp;quot; ]]; then
+    echo -e $COLOR_GREEN
+  else
+    echo -e $COLOR_OCHRE
+  fi
+}
+
+function git_branch {
+  local git_status=&amp;quot;$(git status 2&amp;gt; /dev/null)&amp;quot;
+  local on_branch=&amp;quot;On branch ([^${IFS}]*)&amp;quot;
+  local on_commit=&amp;quot;HEAD detached at ([^${IFS}]*)&amp;quot;
+
+  if [[ $git_status =~ $on_branch ]]; then
+    local branch=${BASH_REMATCH[1]}
+    echo &amp;quot;($branch)&amp;quot;
+  elif [[ $git_status =~ $on_commit ]]; then
+    local commit=${BASH_REMATCH[1]}
+    echo &amp;quot;($commit)&amp;quot;
+  fi
+}
+
+PS1=&#39;$(git status &amp;amp;&amp;gt; /dev/null || printf &amp;quot;\u@\h:\w\$ &amp;quot;)&#39; # for non git repos
+PS1+=&#39;$(git status &amp;amp;&amp;gt; /dev/null &amp;amp;&amp;amp; printf &amp;quot;&#39;  # in git repo
+PS1+=&amp;quot;\[$COLOR_RESET\][\W]&amp;quot;                   # basename of pwd
+PS1+=&amp;quot;\[\$(git_color)\]&amp;quot;                      # colors git status
+PS1+=&amp;quot;\$(git_branch)&amp;quot;                         # prints current branch
+PS1+=&amp;quot;\[$BLUE\]\[$COLOR_RESET2\]\\$ &amp;quot;         # &#39;#&#39; for root, else &#39;$&#39;
+PS1+=&#39;&amp;quot;)&#39;                                     # end of command
+export PS1
+
+&lt;/code&gt;&lt;/pre&gt;
+</description>
+    </item>
+    
+    
+  </channel>
+</rss>

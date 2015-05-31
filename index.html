@@ -88,6 +88,123 @@
   
   <div class="post">
     <h1 class="post-title">
+      <a href="http://otm.github.io/2015/05/bash-prompt-for-git/">
+        Bash Prompt for Git
+      </a>
+    </h1>
+
+    <span class="post-date">May 31, 2015</span>
+
+    
+
+
+    
+
+<p><strong><em>Hacking a bash prompt that adapts when entering a git repository.</em></strong></p>
+
+<div style="background-color: #f2dede; color: #a94442; border-color: #ebccd1; padding: 15px; border: 1px solid transparent; border-radius: 4px; margin-bottom: 1rem; font-size: 0.8rem">
+<img src="/images/glyphicons-197-circle-exclamation-mark.png" style="display: inline-block; top: 5px; position: relative; margin: 0px 5px 0 0px" alt="Disclaimer"/>
+Disclaimer: This is a 15min hack which might include bugs and can definitely be made more performant.
+</div>
+
+<p>This bash hack will keep the normal prompt, and only change it when entering a directory that is tracked by git. In a git repository it will display the basename of the directory and branch. The branch name is colored accordingly:</p>
+
+<div style="background-color: grey; border-radius: 4px; padding: 5px 0 5px 0; margin-bottom: 1rem">
+<ul style="margin-bottom: 0">
+  <li><span style="color: red">Red</span> - uncommitted working
+  <li><span style="color: yellow">Yellow</span> - your brancgh is ahead
+  <li><span style="color: green">Green</span> - nothing to commit
+  <li><span style="color: #ccaa2b">Ochre</span> - all other statuses
+</ul>
+</div>
+
+<h3 id="examples:eb94dde80e8e80ab0d0eb195da1d2d24">Examples</h3>
+
+<div style="position:relative">
+<pre>
+nils@ratchet:~/project$
+</pre>
+<div style="position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px">
+Normal Directory
+</div>
+</div>
+
+<div style="position:relative">
+<pre>
+[go]<span style="color: red">(master)</span>$
+</pre>
+<div style="position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px">
+Non Commited
+</div>
+</div>
+
+<div style="position:relative">
+<pre>
+[go]<span style="color: green">(master)</span>$
+</pre>
+<div style="position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px">
+Clean
+</div>
+</div>
+
+<h3 id="code:eb94dde80e8e80ab0d0eb195da1d2d24">Code</h3>
+
+<p>The following code should be included in the <code>.bashrc</code> file</p>
+
+<pre><code class="language-bash">COLOR_RED=&quot;\033[0;31m&quot;
+COLOR_YELLOW=&quot;\033[0;33m&quot;
+COLOR_GREEN=&quot;\033[0;32m&quot;
+COLOR_OCHRE=&quot;\033[38;5;95m&quot;
+COLOR_BLUE=&quot;\033[0;34m&quot;
+COLOR_WHITE=&quot;\033[0;37m&quot;
+COLOR_RESET=&quot;\033[0m&quot;
+COLOR_RESET2=&quot;\e[0m&quot;
+
+function git_color {
+  local git_status=&quot;$(git status 2&gt; /dev/null)&quot;
+
+  if [[ ! $git_status =~ &quot;working directory clean&quot; ]]; then
+    echo -e $COLOR_RED
+  elif [[ $git_status =~ &quot;Your branch is ahead of&quot; ]]; then
+    echo -e $COLOR_YELLOW
+  elif [[ $git_status =~ &quot;nothing to commit&quot; ]]; then
+    echo -e $COLOR_GREEN
+  else
+    echo -e $COLOR_OCHRE
+  fi
+}
+
+function git_branch {
+  local git_status=&quot;$(git status 2&gt; /dev/null)&quot;
+  local on_branch=&quot;On branch ([^${IFS}]*)&quot;
+  local on_commit=&quot;HEAD detached at ([^${IFS}]*)&quot;
+
+  if [[ $git_status =~ $on_branch ]]; then
+    local branch=${BASH_REMATCH[1]}
+    echo &quot;($branch)&quot;
+  elif [[ $git_status =~ $on_commit ]]; then
+    local commit=${BASH_REMATCH[1]}
+    echo &quot;($commit)&quot;
+  fi
+}
+
+PS1='$(git status &amp;&gt; /dev/null || printf &quot;\u@\h:\w\$ &quot;)' # for non git repos
+PS1+='$(git status &amp;&gt; /dev/null &amp;&amp; printf &quot;'  # in git repo
+PS1+=&quot;\[$COLOR_RESET\][\W]&quot;                   # basename of pwd
+PS1+=&quot;\[\$(git_color)\]&quot;                      # colors git status
+PS1+=&quot;\$(git_branch)&quot;                         # prints current branch
+PS1+=&quot;\[$BLUE\]\[$COLOR_RESET2\]\\$ &quot;         # '#' for root, else '$'
+PS1+='&quot;)'                                     # end of command
+export PS1
+
+</code></pre>
+
+  </div>
+  
+  
+  
+  <div class="post">
+    <h1 class="post-title">
       <a href="http://otm.github.io/2015/05/raft-a-first-implementation/">
         Raft: A First Implementation
       </a>
