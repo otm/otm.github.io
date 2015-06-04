@@ -188,14 +188,20 @@ function git_branch {
   fi
 }
 
-PS1='$(git status &amp;&gt; /dev/null || printf &quot;\u@\h:\w\$ &quot;)' # for non git repos
-PS1+='$(git status &amp;&gt; /dev/null &amp;&amp; printf &quot;'  # in git repo
-PS1+=&quot;\[$COLOR_RESET\][\W]&quot;                   # basename of pwd
-PS1+=&quot;\[\$(git_color)\]&quot;                      # colors git status
-PS1+=&quot;\$(git_branch)&quot;                         # prints current branch
-PS1+=&quot;\[$BLUE\]\[$COLOR_RESET2\]\\$ &quot;         # '#' for root, else '$'
-PS1+='&quot;)'                                     # end of command
+function git_dir {
+  echo &quot;$(basename `git rev-parse --show-toplevel`)/$(git rev-parse --show-prefix)&quot;
+}
+
+PS1='$(git status &amp;&gt; /dev/null || printf &quot;\u@\h:\w\$ &quot;)' # other dir
+PS1+='$(git status &amp;&gt; /dev/null &amp;&amp; printf &quot;' # if we are in git dir
+PS1+=&quot;\[$COLOR_RESET\]&quot;         # reset color
+PS1+=&quot;[\$(git_dir)]&quot;            # get git dir + path
+PS1+=&quot;\[\$(git_color)\]&quot;        # colors git status
+PS1+=&quot;\$(git_branch)&quot;           # prints current branch
+PS1+=&quot;\[$BLUE\]\[$COLOR_RESET2\]\\$ &quot;   # '#' for root, else '$'
+PS1+='&quot;)'
 export PS1
+
 
 </code></pre>
 
