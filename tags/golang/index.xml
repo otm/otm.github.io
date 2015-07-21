@@ -3,7 +3,7 @@
   <channel>
       <title>otm.io</title>
       <generator uri="https://hugo.spf13.com">Hugo</generator>
-    <link>http://otm.github.io/tags/golang/</link>
+    <link>https://otm.github.io/tags/golang/</link>
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>
@@ -14,10 +14,10 @@
     
     <item>
       <title>The Raft Algorithm</title>
-      <link>http://otm.github.io/2015/05/the-raft-algorithm/</link>
+      <link>https://otm.github.io/2015/05/the-raft-algorithm/</link>
       <pubDate>Wed, 27 May 2015 22:24:16 CEST</pubDate>
       <author>Nils Lagerkvist</author>
-      <guid>http://otm.github.io/2015/05/the-raft-algorithm/</guid>
+      <guid>https://otm.github.io/2015/05/the-raft-algorithm/</guid>
       <description>
 
 &lt;p&gt;The Raft consensus algorithm provides an understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or an alternative, to an algorithm called Paxos.&lt;/p&gt;

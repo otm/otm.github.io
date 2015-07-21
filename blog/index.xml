@@ -3,7 +3,7 @@
   <channel>
       <title>otm.io</title>
       <generator uri="https://hugo.spf13.com">Hugo</generator>
-    <link>http://otm.github.io/blog/</link>
+    <link>https://otm.github.io/blog/</link>
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>
@@ -12,16 +12,16 @@
     
     <item>
       <title>Bash Prompt for Git</title>
-      <link>http://otm.github.io/2015/05/bash-prompt-for-git/</link>
+      <link>https://otm.github.io/2015/05/bash-prompt-for-git/</link>
       <pubDate>Sun, 31 May 2015 10:42:52 CEST</pubDate>
       <author>Nils Lagerkvist</author>
-      <guid>http://otm.github.io/2015/05/bash-prompt-for-git/</guid>
+      <guid>https://otm.github.io/2015/05/bash-prompt-for-git/</guid>
       <description>
 
 &lt;p&gt;&lt;strong&gt;&lt;em&gt;Hacking a bash prompt that adapts when entering a git repository.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
 
 &lt;div style=&#34;background-color: #f2dede; color: #a94442; border-color: #ebccd1; padding: 15px; border: 1px solid transparent; border-radius: 4px; margin-bottom: 1rem; font-size: 0.8rem&#34;&gt;
-&lt;img src=&#34;http://otm.github.io/images/glyphicons-197-circle-exclamation-mark.png&#34; style=&#34;display: inline-block; top: 5px; position: relative; margin: 0px 5px 0 0px&#34; alt=&#34;Disclaimer&#34;/&gt;
+&lt;img src=&#34;https://otm.github.io/images/glyphicons-197-circle-exclamation-mark.png&#34; style=&#34;display: inline-block; top: 5px; position: relative; margin: 0px 5px 0 0px&#34; alt=&#34;Disclaimer&#34;/&gt;
 Disclaimer: This is a 15min hack which might include bugs and can definitely be made more performant.
 &lt;/div&gt;
 
@@ -129,26 +129,38 @@ export PS1
     
     <item>
       <title>Raft: A First Implementation</title>
-      <link>http://otm.github.io/2015/05/raft-a-first-implementation/</link>
+      <link>https://otm.github.io/2015/05/raft-a-first-implementation/</link>
       <pubDate>Sat, 30 May 2015 15:28:10 CEST</pubDate>
       <author>Nils Lagerkvist</author>
-      <guid>http://otm.github.io/2015/05/raft-a-first-implementation/</guid>
+      <guid>https://otm.github.io/2015/05/raft-a-first-implementation/</guid>
       <description>
 
 &lt;p&gt;&lt;strong&gt;&lt;em&gt;tl;dr In this part we will implement a very simplistic cluster node using the etcd raft implementation. And with the node implementation we will start up a small cluster.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
 
-&lt;p&gt;The complete source to this post can be found at &lt;a href=&#34;http://github.com/otm/raft-part-1&#34;&gt;http://github.com/otm/raft-part-1&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;The complete source to this post can be found at &lt;a href=&#34;http://github.com/otm/raft-part-1&#34;&gt;http://github.com/otm/raft-part-1&lt;/a&gt;, and documentation for the etcd raft at &lt;a href=&#34;https://godoc.org/github.com/coreos/etcd/raft&#34;&gt;https://godoc.org/github.com/coreos/etcd/raft&lt;/a&gt;&lt;/p&gt;
 
 &lt;h3 id=&#34;creating-a-basic-node:91623121bcc5f99f9298f5ee8624ca3c&#34;&gt;Creating a Basic Node&lt;/h3&gt;
 
 &lt;p&gt;Clusters are built by nodes, so lets start of by defining a node. Initially the node only needs to keep track of the raft and the persistent storage. Below is a minimal implementation of the node type and its constructor function.&lt;/p&gt;
 
-&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;  const hb = 1
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;import (
+  &amp;quot;github.com/coreos/etcd/raft&amp;quot;
+  &amp;quot;github.com/coreos/etcd/raft/raftpb&amp;quot;
+  &amp;quot;golang.org/x/net/context&amp;quot;
+)
+
+  const hb = 1
 
   type node struct {
+    // id is the node id in the cluster
+    id        unint64
+
     // the raft that the cluster node will use
     // this includes the WAL
-  	raft      raft.Node
+    raft      raft.Node
+
+    // the raft configuration
+    cfg      *raft.Config
 
     // pstore is a fake implementation of a persistent storage
     // that will be used side-by-side with the WAL in the raft
@@ -159,19 +171,27 @@ export PS1
     n := &amp;amp;node{
       id: id,
       cfg: &amp;amp;raft.Config{
-    		ID:              uint64(id),
-    		ElectionTick:    10 * hb,
+        // ID in the etcd raft
+        ID:              uint64(id),
+
+        // ElectionTick controls the time before a new election starts
+        ElectionTick:    10 * hb,
+
+        // HeartbeatTick controls the time between heartbeats
         HeartbeatTick:   hb,
-    		Storage:         raft.NewMemoryStorage(),
-    		MaxSizePerMsg:   math.MaxUint16,
-    		MaxInflightMsgs: 256,
-    	},
+
+        // Storage contains the log
+        Storage:         raft.NewMemoryStorage(),
+
+        MaxSizePerMsg:   math.MaxUint16,
+        MaxInflightMsgs: 256,
+      },
       pstore: make(map[string]string),
     }
 
     n.raft = raft.StartNode(n.cfg, peers)
 
-  	return n
+    return n
   }
 
 &lt;/code&gt;&lt;/pre&gt;
@@ -188,18 +208,18 @@ export PS1
 &lt;p&gt;So the state machine main loop will look like this:&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) run() {
-	n.ticker = time.Tick(time.Second)
-	for {
-		select {
-		case &amp;lt;-n.ticker:
+  n.ticker = time.Tick(time.Second)
+  for {
+    select {
+    case &amp;lt;-n.ticker:
       // Point (4) above
-			n.raft.Tick()
-		case rd := &amp;lt;-n.raft.Ready():
-			// Point (2) above
-		case &amp;lt;-n.done:
-			return
-		}
-	}
+      n.raft.Tick()
+    case rd := &amp;lt;-n.raft.Ready():
+      // Point (2) above
+    case &amp;lt;-n.done:
+      return
+    }
+  }
 }
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -286,15 +306,15 @@ n.raft.Advance() // (4)
 &lt;/ol&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry, snapshot raftpb.Snapshot) {
-	n.store.Append(entries)
+  n.store.Append(entries)
 
-	if !raft.IsEmptyHardState(hardState) {
-		n.store.SetHardState(hardState)
-	}
+  if !raft.IsEmptyHardState(hardState) {
+    n.store.SetHardState(hardState)
+  }
 
-	if !raft.IsEmptySnap(snapshot) {
-		n.store.ApplySnapshot(snapshot)
-	}
+  if !raft.IsEmptySnap(snapshot) {
+    n.store.ApplySnapshot(snapshot)
+  }
 }
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -303,17 +323,17 @@ n.raft.Advance() // (4)
 &lt;p&gt;For now the RPC will be simulated with a global map which holds the nodes. With the send function there is also a matching receive function. Note, the &lt;code&gt;receive()&lt;/code&gt; function calls &lt;code&gt;raft.Step()&lt;/code&gt;, and that is crucial to advance the state machine.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) send(messages []raftpb.Message) {
-	for _, m := range messages {
+  for _, m := range messages {
     // Inspect the message (just for fun)
-		log.Println(raft.DescribeMessage(m, nil))
+    log.Println(raft.DescribeMessage(m, nil))
 
-		// send message to other node
-		nodes[m.To].receive(n.ctx, m)
-	}
+    // send message to other node
+    nodes[m.To].receive(n.ctx, m)
+  }
 }
 
 func (n *node) receive(ctx context.Context, message raftpb.Message) {
-	n.raft.Step(ctx, message)
+  n.raft.Step(ctx, message)
 }
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -323,12 +343,12 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) process(entry raftpb.Entry) {
 
-	if entry.Type == raftpb.EntryNormal &amp;amp;&amp;amp; entry.Data != nil {
-		log.Println(&amp;quot;normal message:&amp;quot;, string(entry.Data))
+  if entry.Type == raftpb.EntryNormal &amp;amp;&amp;amp; entry.Data != nil {
+    log.Println(&amp;quot;normal message:&amp;quot;, string(entry.Data))
 
     parts := bytes.SplitN(entry.Data, []byte(&amp;quot;:&amp;quot;), 2)
-		n.pstore[string(parts[0])] = string(parts[1])
-	}
+    n.pstore[string(parts[0])] = string(parts[1])
+  }
 }
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -337,7 +357,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 &lt;p&gt;For now &lt;code&gt;processSnapshot&lt;/code&gt; will only be a dummy implementation. But basically it should only overwrite the the current persistent storage.&lt;/p&gt;
 
 &lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;func (n *node) processSnapshot(snapshot raftpb.Snapshot) {
-	log.Printf(&amp;quot;Applying snapshot on %v is not implemenetd yet&amp;quot;)
+  log.Printf(&amp;quot;Applying snapshot on %v is not implemenetd yet&amp;quot;)
 }
 &lt;/code&gt;&lt;/pre&gt;
 
@@ -399,10 +419,10 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&amp;quot;key3:value3&amp;quot;))
     
     <item>
       <title>The Raft Algorithm</title>
-      <link>http://otm.github.io/2015/05/the-raft-algorithm/</link>
+      <link>https://otm.github.io/2015/05/the-raft-algorithm/</link>
       <pubDate>Wed, 27 May 2015 22:24:16 CEST</pubDate>
       <author>Nils Lagerkvist</author>
-      <guid>http://otm.github.io/2015/05/the-raft-algorithm/</guid>
+      <guid>https://otm.github.io/2015/05/the-raft-algorithm/</guid>
       <description>
 
 &lt;p&gt;The Raft consensus algorithm provides an understandable, easy to use, and generic way to distribute a state machine in a cluster. The Raft is a successor, or an alternative, to an algorithm called Paxos.&lt;/p&gt;

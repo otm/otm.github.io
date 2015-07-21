@@ -3,7 +3,7 @@
   <channel>
       <title>otm.io</title>
       <generator uri="https://hugo.spf13.com">Hugo</generator>
-    <link>http://otm.github.io/tags/development/</link>
+    <link>https://otm.github.io/tags/development/</link>
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>

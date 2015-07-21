@@ -12,10 +12,10 @@
   <title> otm.io </title>
 
   
-  <link rel="stylesheet" href="http://otm.github.io/css/poole.css">
-  <link rel="stylesheet" href="http://otm.github.io/css/syntax.css">
-  <link rel="stylesheet" href="http://otm.github.io/css/hyde.css">
-  <link href="/css/prism.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://otm.github.io/css/poole.css">
+  <link rel="stylesheet" href="https://otm.github.io/css/syntax.css">
+  <link rel="stylesheet" href="https://otm.github.io/css/hyde.css">
+  <link rel="stylesheet" href="https://otm.github.io/css/prism.css">
   <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=PT+Sans:400,400italic,700|Abril+Fatface">
 
   
@@ -23,7 +23,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
 
   
-  <link href="http://otm.github.io/index.xml" rel="alternate" type="application/rss+xml" title="otm.io" />
+  <link href="https://otm.github.io/index.xml" rel="alternate" type="application/rss+xml" title="otm.io" />
 
   <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
 
@@ -53,7 +53,7 @@
 <div class="sidebar">
   <div class="container sidebar-sticky">
     <div class="sidebar-about">
-      <h1 class="brand"><a href="http://otm.github.io">otm.io</a></h1>
+      <h1 class="brand"><a href="https://otm.github.io">otm.io</a></h1>
       <p class="lead">
        heeding the code 
       </p>
@@ -62,7 +62,7 @@
 
 
     <ul class="sidebar-nav">
-      <li><a href="http://otm.github.io/blog">Posts</a></li>
+      <li><a href="https://otm.github.io/blog">Posts</a></li>
       
         <li><a href="/about/">About </a></li>
       
@@ -100,7 +100,7 @@
   
   <div class="post">
     <h1 class="post-title">
-      <a href="http://otm.github.io/2015/05/bash-prompt-for-git/">
+      <a href="https://otm.github.io/2015/05/bash-prompt-for-git/">
         Bash Prompt for Git
       </a>
     </h1>
@@ -223,7 +223,7 @@ export PS1
   
   <div class="post">
     <h1 class="post-title">
-      <a href="http://otm.github.io/2015/05/raft-a-first-implementation/">
+      <a href="https://otm.github.io/2015/05/raft-a-first-implementation/">
         Raft: A First Implementation
       </a>
     </h1>
@@ -232,7 +232,7 @@ export PS1
 
     
       
-      <p class="seriesname">Series: <a href="http://otm.github.io/series/raft-101">Raft 101</a></p>
+      <p class="seriesname">Series: <a href="https://otm.github.io/series/raft-101">Raft 101</a></p>
     
 
 
@@ -240,18 +240,30 @@ export PS1
 
 <p><strong><em>tl;dr In this part we will implement a very simplistic cluster node using the etcd raft implementation. And with the node implementation we will start up a small cluster.</em></strong></p>
 
-<p>The complete source to this post can be found at <a href="http://github.com/otm/raft-part-1">http://github.com/otm/raft-part-1</a></p>
+<p>The complete source to this post can be found at <a href="http://github.com/otm/raft-part-1">http://github.com/otm/raft-part-1</a>, and documentation for the etcd raft at <a href="https://godoc.org/github.com/coreos/etcd/raft">https://godoc.org/github.com/coreos/etcd/raft</a></p>
 
 <h3 id="creating-a-basic-node:91623121bcc5f99f9298f5ee8624ca3c">Creating a Basic Node</h3>
 
 <p>Clusters are built by nodes, so lets start of by defining a node. Initially the node only needs to keep track of the raft and the persistent storage. Below is a minimal implementation of the node type and its constructor function.</p>
 
-<pre><code class="language-go">  const hb = 1
+<pre><code class="language-go">import (
+  &quot;github.com/coreos/etcd/raft&quot;
+  &quot;github.com/coreos/etcd/raft/raftpb&quot;
+  &quot;golang.org/x/net/context&quot;
+)
+
+  const hb = 1
 
   type node struct {
+    // id is the node id in the cluster
+    id        unint64
+
     // the raft that the cluster node will use
     // this includes the WAL
-  	raft      raft.Node
+    raft      raft.Node
+
+    // the raft configuration
+    cfg      *raft.Config
 
     // pstore is a fake implementation of a persistent storage
     // that will be used side-by-side with the WAL in the raft
@@ -262,19 +274,27 @@ export PS1
     n := &amp;node{
       id: id,
       cfg: &amp;raft.Config{
-    		ID:              uint64(id),
-    		ElectionTick:    10 * hb,
+        // ID in the etcd raft
+        ID:              uint64(id),
+
+        // ElectionTick controls the time before a new election starts
+        ElectionTick:    10 * hb,
+
+        // HeartbeatTick controls the time between heartbeats
         HeartbeatTick:   hb,
-    		Storage:         raft.NewMemoryStorage(),
-    		MaxSizePerMsg:   math.MaxUint16,
-    		MaxInflightMsgs: 256,
-    	},
+
+        // Storage contains the log
+        Storage:         raft.NewMemoryStorage(),
+
+        MaxSizePerMsg:   math.MaxUint16,
+        MaxInflightMsgs: 256,
+      },
       pstore: make(map[string]string),
     }
 
     n.raft = raft.StartNode(n.cfg, peers)
 
-  	return n
+    return n
   }
 
 </code></pre>
@@ -291,18 +311,18 @@ export PS1
 <p>So the state machine main loop will look like this:</p>
 
 <pre><code class="language-go">func (n *node) run() {
-	n.ticker = time.Tick(time.Second)
-	for {
-		select {
-		case &lt;-n.ticker:
+  n.ticker = time.Tick(time.Second)
+  for {
+    select {
+    case &lt;-n.ticker:
       // Point (4) above
-			n.raft.Tick()
-		case rd := &lt;-n.raft.Ready():
-			// Point (2) above
-		case &lt;-n.done:
-			return
-		}
-	}
+      n.raft.Tick()
+    case rd := &lt;-n.raft.Ready():
+      // Point (2) above
+    case &lt;-n.done:
+      return
+    }
+  }
 }
 </code></pre>
 
@@ -389,15 +409,15 @@ n.raft.Advance() // (4)
 </ol>
 
 <pre><code class="language-go">func (n *node) saveToStorage(hardState raftpb.HardState, entries []raftpb.Entry, snapshot raftpb.Snapshot) {
-	n.store.Append(entries)
+  n.store.Append(entries)
 
-	if !raft.IsEmptyHardState(hardState) {
-		n.store.SetHardState(hardState)
-	}
+  if !raft.IsEmptyHardState(hardState) {
+    n.store.SetHardState(hardState)
+  }
 
-	if !raft.IsEmptySnap(snapshot) {
-		n.store.ApplySnapshot(snapshot)
-	}
+  if !raft.IsEmptySnap(snapshot) {
+    n.store.ApplySnapshot(snapshot)
+  }
 }
 </code></pre>
 
@@ -406,17 +426,17 @@ n.raft.Advance() // (4)
 <p>For now the RPC will be simulated with a global map which holds the nodes. With the send function there is also a matching receive function. Note, the <code>receive()</code> function calls <code>raft.Step()</code>, and that is crucial to advance the state machine.</p>
 
 <pre><code class="language-go">func (n *node) send(messages []raftpb.Message) {
-	for _, m := range messages {
+  for _, m := range messages {
     // Inspect the message (just for fun)
-		log.Println(raft.DescribeMessage(m, nil))
+    log.Println(raft.DescribeMessage(m, nil))
 
-		// send message to other node
-		nodes[m.To].receive(n.ctx, m)
-	}
+    // send message to other node
+    nodes[m.To].receive(n.ctx, m)
+  }
 }
 
 func (n *node) receive(ctx context.Context, message raftpb.Message) {
-	n.raft.Step(ctx, message)
+  n.raft.Step(ctx, message)
 }
 </code></pre>
 
@@ -426,12 +446,12 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 
 <pre><code class="language-go">func (n *node) process(entry raftpb.Entry) {
 
-	if entry.Type == raftpb.EntryNormal &amp;&amp; entry.Data != nil {
-		log.Println(&quot;normal message:&quot;, string(entry.Data))
+  if entry.Type == raftpb.EntryNormal &amp;&amp; entry.Data != nil {
+    log.Println(&quot;normal message:&quot;, string(entry.Data))
 
     parts := bytes.SplitN(entry.Data, []byte(&quot;:&quot;), 2)
-		n.pstore[string(parts[0])] = string(parts[1])
-	}
+    n.pstore[string(parts[0])] = string(parts[1])
+  }
 }
 </code></pre>
 
@@ -440,7 +460,7 @@ func (n *node) receive(ctx context.Context, message raftpb.Message) {
 <p>For now <code>processSnapshot</code> will only be a dummy implementation. But basically it should only overwrite the the current persistent storage.</p>
 
 <pre><code class="language-go">func (n *node) processSnapshot(snapshot raftpb.Snapshot) {
-	log.Printf(&quot;Applying snapshot on %v is not implemenetd yet&quot;)
+  log.Printf(&quot;Applying snapshot on %v is not implemenetd yet&quot;)
 }
 </code></pre>
 
@@ -502,7 +522,7 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&quot;key3:value3&quot;))
   
   <div class="post">
     <h1 class="post-title">
-      <a href="http://otm.github.io/2015/05/the-raft-algorithm/">
+      <a href="https://otm.github.io/2015/05/the-raft-algorithm/">
         The Raft Algorithm
       </a>
     </h1>
@@ -511,7 +531,7 @@ nodes[3].node.Propose(nodes[3].ctx, []byte(&quot;key3:value3&quot;))
 
     
       
-      <p class="seriesname">Series: <a href="http://otm.github.io/series/raft-101">Raft 101</a></p>
+      <p class="seriesname">Series: <a href="https://otm.github.io/series/raft-101">Raft 101</a></p>
     
 
 
