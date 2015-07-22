@@ -7,7 +7,252 @@
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>
-    <updated>Sun, 31 May 2015 10:42:52 CEST</updated>
+    <updated>Tue, 21 Jul 2015 15:48:49 CEST</updated>
+    
+    
+    <item>
+      <title>Embedding Lua in Go</title>
+      <link>https://otm.github.io/2015/07/embedding-lua-in-go/</link>
+      <pubDate>Tue, 21 Jul 2015 15:48:49 CEST</pubDate>
+      <author>Nils Lagerkvist</author>
+      <guid>https://otm.github.io/2015/07/embedding-lua-in-go/</guid>
+      <description>
+
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;Command line parameters, environment variables, and configuration files are common ways to change the behavior of software. However, sometimes that is just not enough and an embedded language can be the solution. In this case we will embed &lt;a href=&#34;http://www.lua.org/&#34;&gt;Lua&lt;/a&gt; using &lt;a href=&#34;https://github.com/yuin/gopher-lua&#34;&gt;gopher-lua&lt;/a&gt;.&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Godoc: &lt;a href=&#34;http://godoc.org/github.com/yuin/gopher-lua&#34;&gt;http://godoc.org/github.com/yuin/gopher-lua&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;All code in the post can be found at &lt;a href=&#34;http://github.com/otm/embedding-lua-in-go&#34;&gt;http://github.com/otm/embedding-lua-in-go&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+
+&lt;h3 id=&#34;running-lua-code-in-go:83ec6516b820c0d2173dd0038597a655&#34;&gt;Running Lua Code in Go&lt;/h3&gt;
+
+&lt;p&gt;First lets set up the environment and test that it works, start by install gopher-lua:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;go get github.com/yuin/gopher-lua
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Secondly let&amp;rsquo;s create a minimal implementation:&lt;/p&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+&lt;code class=&#34;language-go&#34;&gt;
+package main
+
+import &#34;github.com/yuin/gopher-lua&#34;
+
+func main() {
+	L := lua.NewState()
+	defer L.Close()
+	if err := L.DoString(`print(&#34;Hello World&#34;)`); err != nil {
+		panic(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+hello.go
+&lt;/div&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;&lt;code&gt;lua.NewState()&lt;/code&gt; creates our Lua VM, and it is though &lt;code&gt;L&lt;/code&gt; &lt;em&gt;(*lua.LState)&lt;/em&gt; we will interact with Lua in the future. Throughout the post &lt;code&gt;L&lt;/code&gt; will denote a pointer to &lt;code&gt;lua.LState&lt;/code&gt;. &lt;code&gt;L.DoString&lt;/code&gt; runs the Lua code in the VM. Running the Go code will yield:&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;$ go run hello.go
+Hello World
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;To run a Lua file, instead of a string, call &lt;code&gt;lua.DoFile&lt;/code&gt;&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;L := lua.NewState()
+defer L.Close()
+if err := L.DoFile(&amp;quot;hello.lua&amp;quot;); err != nil {
+		panic(err)
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;embedding-lua-code-as-strings:83ec6516b820c0d2173dd0038597a655&#34;&gt;Embedding Lua Code as Strings&lt;/h3&gt;
+
+&lt;p&gt;&lt;code&gt;DoFile&lt;/code&gt; and &lt;code&gt;DoString&lt;/code&gt; can be called several times, and thus it can be utilized to expose Lua function. In the example bellow &lt;code&gt;sayHello&lt;/code&gt; function is first defined, and then called in the second call to &lt;code&gt;DoString&lt;/code&gt;&lt;/p&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+&lt;code class=&#34;language-go&#34;&gt;
+func main() {
+	L := lua.NewState()
+	defer L.Close()
+	if err := L.DoString(`function sayHello() print(&#34;Hello Again&#34;) end`); err != nil {
+		panic(err)
+	}
+
+	if err := L.DoString(`sayHello()`); err != nil {
+		panic(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+hello2.go
+&lt;/div&gt;
+&lt;/div&gt;
+
+
+&lt;h3 id=&#34;calling-go-code-from-lua:83ec6516b820c0d2173dd0038597a655&#34;&gt;Calling Go Code from Lua&lt;/h3&gt;
+
+&lt;p&gt;Exposing Go functions to Lua is essential to create custom a custom API. A Go function should implement the &lt;code&gt;LGFunction&lt;/code&gt; type to be callable from Lua.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type LGFunction func(*LState) int
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;It receives a &lt;code&gt;*lua.LState&lt;/code&gt; and returns an integer. The &lt;code&gt;LState&lt;/code&gt; is needed for interacting with the Lua VM, most commonly for retrieving function arguments. The returned integer defines how many return values has been pushed to the Lua stack. A complete example looks like this:&lt;/p&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+&lt;code class=&#34;language-go&#34;&gt;
+func square(L *lua.LState) int {  //*
+	i := L.ToInt(1)          // get first (1) function argument and convert to int
+	ln := lua.LNumber(i * i) // make calculation and cast to LNumber
+	L.Push(ln)               // Push it to the stack
+	return 1                 // Notify that we pushed one value to the stack
+}
+
+func main() {
+	L := lua.NewState()
+	defer L.Close()
+
+	L.SetGlobal(&#34;square&#34;, L.NewFunction(square)) // Register our function in Lua
+	if err := L.DoString(`print(&#34;4 * 4 = &#34; .. square(4))`); err != nil {
+		panic(err)
+	}
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+calling-go.go
+&lt;/div&gt;
+&lt;/div&gt;
+
+
+&lt;p&gt;The LState defines some convenience functions, in the example above we are using &lt;code&gt;L.ToInt(1)&lt;/code&gt; to fetch the first function argument.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;Note:&lt;/em&gt;&lt;/strong&gt; &lt;em&gt;Lua is zero-indexed, so the first function argument is fetched with &lt;code&gt;L.ToInt(1)&lt;/code&gt;, second argument with &lt;code&gt;L.ToInt(2)&lt;/code&gt;. In Lua, all arrays are 1-indexed, however t[0] is still valid but that would result in the lenght of the array to be off-by-one.&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;There are a number of &lt;code&gt;To...(n int)&lt;/code&gt; functions available. These functions does not throw errors, but will return Go default values if conversion is not possible. To get automatic errors the &lt;code&gt;L.Check...(n int)&lt;/code&gt; family of functions can be used; They throw a Lua error if the type check fails. For optional arguments the &lt;code&gt;L.Opt...(n int, default T)&lt;/code&gt; functions can be used. Example:&lt;/p&gt;
+
+&lt;p&gt;&lt;code&gt;L.GetTop()&lt;/code&gt; returns the number of arguments that was used when the function was called. And to fetch an argument without conversion the &lt;code&gt;L.Get(n int)&lt;/code&gt; function can be used.&lt;/p&gt;
+
+&lt;p&gt;If an argument to a function can be of more then one type the &lt;code&gt;L.CheckTypes(n int, types ...LValueType)&lt;/code&gt; function can be used to check and yield an error to the user. Using the &lt;code&gt;L.CheckTypes&lt;/code&gt; function equate to checking the type manually and then calling &lt;code&gt;L.TypeError(n int, message string)&lt;/code&gt; if there is an error.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;// Second argument can be string or function
+L.CheckTypes(2, lua.LTString, lua.LTFunction)
+switch lv := L.Get(2).(type) {
+case LString:
+	// use as string
+case Lfunction:
+  // use as function
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;calling-lua-from-go:83ec6516b820c0d2173dd0038597a655&#34;&gt;Calling Lua from Go&lt;/h3&gt;
+
+&lt;p&gt;Calling Lua code is done through &lt;code&gt;L.CallByParam&lt;/code&gt;, which takes a parameters object, &lt;a href=&#34;http://godoc.org/github.com/yuin/gopher-lua#P&#34;&gt;P&lt;/a&gt;, and arguments as variadic parameters. The parameters object takes three important parameters:&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;Fn - the lua.LFunction to call&lt;/li&gt;
+&lt;li&gt;Nret - The number of returned values&lt;/li&gt;
+&lt;li&gt;Protect - If protect is &lt;code&gt;true&lt;/code&gt; an error is returned, otherwise a panic will occur.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The following code defines a &amp;ldquo;concat&amp;rdquo; function in Lua. Calls the concat function with the arguments &amp;ldquo;Go&amp;rdquo; and &amp;ldquo;Lua&amp;rdquo; and prints the resulting string to stdout.&lt;/p&gt;
+
+&lt;div style=&#34;position:relative&#34;&gt;
+&lt;pre&gt;
+&lt;code class=&#34;language-go&#34;&gt;
+// luaCode is the Lua code we want to call from Go
+var luaCode = `
+function concat(a, b)
+	return a .. &#34; + &#34; .. b
+end
+`
+
+func main() {
+	L := lua.NewState()
+	defer L.Close()
+
+	if err := L.DoString(luaCode); err != nil {
+		panic(err)
+	}
+
+	// Call the Lua function concat
+	// Lua analogue:
+	//	str = concat(&#34;Go&#34;, &#34;Lua&#34;)
+	//	print(str)
+	if err := L.CallByParam(lua.P{
+		Fn:      L.GetGlobal(&#34;concat&#34;), // name of Lua function
+		NRet:    1,                     // number of returned values
+		Protect: true,                  // return err or panic
+	}, lua.LString(&#34;Go&#34;), lua.LString(&#34;Lua&#34;)); err != nil {
+		panic(err)
+	}
+
+	// Get the returned value from the stack and cast it to a lua.LString
+	if str, ok := L.Get(-1).(lua.LString); ok {
+		fmt.Println(str)
+	}
+
+	// Pop the returned value from the stack
+	L.Pop(1)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;div style=&#34;position: absolute; right: 0; top: 0; background-color: lightgray; padding: 0 5px 0 5px; border-bottom-left-radius: 5px&#34;&gt;
+calling-lua.go
+&lt;/div&gt;
+&lt;/div&gt;
+
+
+&lt;h3 id=&#34;good-to-know:83ec6516b820c0d2173dd0038597a655&#34;&gt;Good to Know&lt;/h3&gt;
+
+&lt;h4 id=&#34;gopher-lua-types:83ec6516b820c0d2173dd0038597a655&#34;&gt;Gopher-Lua Types&lt;/h4&gt;
+
+&lt;p&gt;The gopher-lua library operates on a interface called &lt;code&gt;LValue&lt;/code&gt;.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;type LValue interface {
+  String() string
+  Type()   LValueType
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;Objects implementing this interface are &lt;code&gt;LNilType&lt;/code&gt;, &lt;code&gt;LBool&lt;/code&gt;, &lt;code&gt;LNumber&lt;/code&gt;, &lt;code&gt;LString&lt;/code&gt;, &lt;code&gt;LFunction&lt;/code&gt;, &lt;code&gt;LUserData&lt;/code&gt;, &lt;code&gt;LState&lt;/code&gt;, &lt;code&gt;LTable&lt;/code&gt;, and &lt;code&gt;LChannel&lt;/code&gt;. Calling the &lt;code&gt;LValue.Type()&lt;/code&gt; returns the corresponding LValueType.&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&#34;language-go&#34;&gt;const (
+  LTNil LValueType = iota
+  LTBool
+  LTNumber
+  LTString
+  LTFunction
+  LTUserData
+  LTThread
+  LTTable
+  LTChannel
+)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h3 id=&#34;covertion-and-check-functions:83ec6516b820c0d2173dd0038597a655&#34;&gt;Covertion and Check functions&lt;/h3&gt;
+
+&lt;p&gt;There are some practical functions to convert and check &lt;code&gt;lua.LValue&lt;/code&gt; objects.&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;&lt;code&gt;lua.LVAsBool(v LValue)&lt;/code&gt; - Convert to bool, nil and false becomes false. Otherwise true.&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;&lt;code&gt;lua.LVAsString(v LValue)&lt;/code&gt; - Converts LString and LNumber to string. Otherwise empty string.&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;&lt;code&gt;lua.CanConvToString(v LValue)&lt;/code&gt; - True if LString or LNumber. Otherwise false.&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;&lt;code&gt;lua.LVIsFalse(v LValue)&lt;/code&gt; - Returns true if nil or false.&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&#34;the-ltable-type:83ec6516b820c0d2173dd0038597a655&#34;&gt;The LTable type&lt;/h3&gt;
+
+&lt;p&gt;One of the most versatile and used data structures in Lua is LTable (actually it is the only one). The LTable type can be used for emulating namespaces and classes. However, the basic API is quite simple, and the advanced features deserves its own post. See &lt;a href=&#34;http://godoc.org/github.com/yuin/gopher-lua#LTable&#34;&gt;http://godoc.org/github.com/yuin/gopher-lua#LTable&lt;/a&gt; for the LTable Go API.&lt;/p&gt;
+</description>
+    </item>
+    
     
     
     <item>
