@@ -7,13 +7,13 @@
     <language>en-us</language>
     <author>Nils Lagerkvist</author>
     <copyright>2015 Nils Lagerkvist</copyright>
-    <updated>Tue, 21 Jul 2015 15:48:49 CEST</updated>
+    <updated>Wed, 22 Jul 2015 16:18:30 CEST</updated>
     
     
     <item>
       <title>Embedding Lua in Go</title>
       <link>https://otm.github.io/2015/07/embedding-lua-in-go/</link>
-      <pubDate>Tue, 21 Jul 2015 15:48:49 CEST</pubDate>
+      <pubDate>Wed, 22 Jul 2015 16:18:30 CEST</pubDate>
       <author>Nils Lagerkvist</author>
       <guid>https://otm.github.io/2015/07/embedding-lua-in-go/</guid>
       <description>
