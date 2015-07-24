@@ -131,7 +131,7 @@ calling-go.go
 
 &lt;p&gt;The LState defines some convenience functions, in the example above we are using &lt;code&gt;L.ToInt(1)&lt;/code&gt; to fetch the first function argument.&lt;/p&gt;
 
-&lt;p&gt;&lt;strong&gt;&lt;em&gt;Note:&lt;/em&gt;&lt;/strong&gt; &lt;em&gt;Lua is zero-indexed, so the first function argument is fetched with &lt;code&gt;L.ToInt(1)&lt;/code&gt;, second argument with &lt;code&gt;L.ToInt(2)&lt;/code&gt;. In Lua, all arrays are 1-indexed, however t[0] is still valid but that would result in the lenght of the array to be off-by-one.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;Note:&lt;/em&gt;&lt;/strong&gt; &lt;em&gt;Lua isn&amp;rsquo;t zero-indexed, so the first function argument is fetched with &lt;code&gt;L.ToInt(1)&lt;/code&gt;, second argument with &lt;code&gt;L.ToInt(2)&lt;/code&gt;. In Lua, all arrays are 1-indexed, however t[0] is still valid but that would result in the lenght of the array to be off-by-one.&lt;/em&gt;&lt;/p&gt;
 
 &lt;p&gt;There are a number of &lt;code&gt;To...(n int)&lt;/code&gt; functions available. These functions does not throw errors, but will return Go default values if conversion is not possible. To get automatic errors the &lt;code&gt;L.Check...(n int)&lt;/code&gt; family of functions can be used; They throw a Lua error if the type check fails. For optional arguments the &lt;code&gt;L.Opt...(n int, default T)&lt;/code&gt; functions can be used. Example:&lt;/p&gt;
 

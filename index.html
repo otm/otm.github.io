@@ -224,7 +224,7 @@ calling-go.go
 
 <p>The LState defines some convenience functions, in the example above we are using <code>L.ToInt(1)</code> to fetch the first function argument.</p>
 
-<p><strong><em>Note:</em></strong> <em>Lua is zero-indexed, so the first function argument is fetched with <code>L.ToInt(1)</code>, second argument with <code>L.ToInt(2)</code>. In Lua, all arrays are 1-indexed, however t[0] is still valid but that would result in the lenght of the array to be off-by-one.</em></p>
+<p><strong><em>Note:</em></strong> <em>Lua isn&rsquo;t zero-indexed, so the first function argument is fetched with <code>L.ToInt(1)</code>, second argument with <code>L.ToInt(2)</code>. In Lua, all arrays are 1-indexed, however t[0] is still valid but that would result in the lenght of the array to be off-by-one.</em></p>
 
 <p>There are a number of <code>To...(n int)</code> functions available. These functions does not throw errors, but will return Go default values if conversion is not possible. To get automatic errors the <code>L.Check...(n int)</code> family of functions can be used; They throw a Lua error if the type check fails. For optional arguments the <code>L.Opt...(n int, default T)</code> functions can be used. Example:</p>
 
